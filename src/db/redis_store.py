@@ -33,7 +33,7 @@ class RedisClient:
             print(f"Redis Error saving job: {e}")
             return False
         
-        def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str) -> Optional[Job]:
         """Retrieves a Job object by ID."""
         try:
             key = f"job:{job_id}"
@@ -77,7 +77,8 @@ class RedisClient:
             pipe.srem("jobs:index", job_id)
             pipe.execute()
             return True
-        except Exceptionas e:
+        except Exception as e:
             print(f"Redis Error deleting job: {e}")
             return False
             
+redis_client = RedisClient()
