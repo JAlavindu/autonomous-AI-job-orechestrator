@@ -1,45 +1,34 @@
-autonomous-ai-job-orchestrator/
-│
-├── src/                          # Source code
-│   ├── orchestrator/             # Core orchestrator logic
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py       # Main orchestrator class
-│   │   ├── job_manager.py        # Job management logic
-│   │   ├── scheduler.py          # Scheduling logic
-│   │   └── executor.py           # Job execution logic
-│   │
-│   ├── ai_models/                # AI models and related logic
-│   │   ├── __init__.py
-│   │   ├── model_registry.py     # Model registry and loading
-│   │   ├── model_trainer.py      # Training logic
-│   │   └── model_inference.py    # Inference logic
-│   │
-│   ├── data/                     # Data handling
-│   │   ├── __init__.py
-│   │   ├── data_loader.py        # Data loading utilities
-│   │   ├── data_preprocessor.py   # Data preprocessing logic
-│   │   └── data_storage.py       # Data storage and retrieval
-│   │
-│   ├── config/                   # Configuration files
-│   │   ├── __init__.py
-│   │   ├── config.yaml           # Main configuration file
-│   │   └── logging.yaml          # Logging configuration
-│   │
-│   ├── tests/                    # Unit and integration tests
-│   │   ├── __init__.py
-│   │   ├── test_orchestrator.py  # Tests for orchestrator
-│   │   ├── test_job_manager.py   # Tests for job manager
-│   │   └── test_data_loader.py   # Tests for data loader
-│   │
-│   └── utils/                    # Utility functions
-│       ├── __init__.py
-│       ├── logger.py             # Logging utilities
-│       └── helpers.py            # Helper functions
-│
-├── scripts/                      # Scripts for deployment and management
-│   ├── deploy.py                 # Deployment script
-│   └── run_orchestrator.py       # Script to run the orchestrator
-│
-├── requirements.txt              # Python dependencies
-├── README.md                     # Project documentation
-└── .gitignore                    # Git ignore file
+from fastapi import APIRouter, HTTPException, status
+from typing import List
+from src.models.job import Job, JobCreate
+from src.orchestrator.job_manager import job_manager
+
+router = APIRouter()
+
+@router.post("/jobs/", response_model=Job, status_code=status.HTTP_201_CREATED)
+def create_job(job_create: JobCreate):
+    """
+    Create a new job with the specified parameters.
+    """
+    try:
+        job = job_manager.create_job(job_create)
+        return job
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/jobs/", response_model=List[Job])
+def list_jobs():
+    """
+    Retrieve a list of all jobs in the system.
+    """
+    return job_manager.list_jobs()
+
+@router.get("/jobs/{job_id}", response_model=Job)
+def get_job(job_id: str):
+    """
+    Retrieve a specific job by its ID.
+    """
+    job = job_manager.get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return job

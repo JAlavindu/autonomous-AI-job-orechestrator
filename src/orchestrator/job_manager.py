@@ -49,5 +49,7 @@ class JobManager:
             #If parent doesn't exist or isn't complete, dependency is not met
             if not parent_job or parent_job.status != JobStatus.COMPLETED:
                 return False
+        
+        return True
 
 job_manager = JobManager()
