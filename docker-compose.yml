@@ -1,45 +1,13 @@
-autonomous-ai-job-orchestrator/
-│
-├── src/                          # Source code
-│   ├── orchestrator/             # Core orchestrator logic
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py       # Main orchestrator class
-│   │   ├── job_manager.py        # Job management logic
-│   │   ├── scheduler.py          # Scheduling logic
-│   │   └── executor.py           # Job execution logic
-│   │
-│   ├── ai_models/                # AI models and related code
-│   │   ├── __init__.py
-│   │   ├── model.py              # Model definition
-│   │   └── training.py           # Model training logic
-│   │
-│   ├── data/                     # Data handling
-│   │   ├── __init__.py
-│   │   ├── data_loader.py        # Data loading utilities
-│   │   └── data_preprocessing.py  # Data preprocessing utilities
-│   │
-│   ├── utils/                    # Utility functions
-│   │   ├── __init__.py
-│   │   ├── logger.py             # Logging utilities
-│   │   └── config.py             # Configuration management
-│   │
-│   └── main.py                   # Entry point of the application
-│
-├── tests/                        # Unit and integration tests
-│   ├── __init__.py
-│   ├── test_orchestrator.py
-│   ├── test_job_manager.py
-│   ├── test_scheduler.py
-│   └── test_executor.py
-│
-├── config/                       # Configuration files
-│   ├── config.yaml               # Main configuration file
-│   └── logging.yaml              # Logging configuration
-│
-├── scripts/                      # Scripts for setup, deployment, etc.
-│   ├── setup.py                  # Setup script
-│   └── deploy.sh                 # Deployment script
-│
-├── requirements.txt              # Python dependencies
-├── README.md                     # Project documentation
-└── .gitignore                    # Git ignore file
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+
+volumes:
+  redis_data:
