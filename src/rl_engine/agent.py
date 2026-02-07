@@ -54,16 +54,24 @@ class RLAgent:
         """
         state = torch.FloatTensor(state).to(self.device)
         next_state = torch.FloatTensor(next_state).to(self.device)
-        action = torch.LongTensor([action]).to(self.device)
+        
+        # FIX: Ensure action is a LongTensor with correct shape for gather
+        action = torch.LongTensor([action]).to(self.device) 
+        
         reward = torch.FloatTensor([reward]).to(self.device)
         done = torch.FloatTensor([done]).to(self.device)
-            
 
         # 1. Get current Q value
+        # q_values usually comes out as shape [action_dim] (e.g. [5])
+        # We need to unsqueeze it to look like a batch of 1: [1, 5] if we want to use gather nicely, 
+        # OR we just index it directly since we aren't using batches.
+        
         q_values = self.policy_net(state)
-        q_value = q_values.gather(0, action)
+        
+        # Direct indexing handles the scaler case safely
+        q_value = q_values[action] 
 
-        # 2. Get max next Q value
+         # 2. Get max next Q value
         next_q_values = self.policy_net(next_state)
         next_q_value = next_q_values.max(0)[0].detach()
         
@@ -77,7 +85,7 @@ class RLAgent:
         loss.backward()
         self.optimizer.step()
 
-        # Decay epsilon
+         # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
