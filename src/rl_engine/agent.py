@@ -68,6 +68,11 @@ class RLAgent:
         
         q_values = self.policy_net(state)
         
+        # Verify action is within bounds (debugging safeguard)
+        if action.item() >= q_values.shape[0]:
+            print(f"[ERROR] Agent attempted to train on invalid action index {action.item()} (Max: {q_values.shape[0]-1})")
+            return 
+
         # Direct indexing handles the scaler case safely
         q_value = q_values[action] 
 
