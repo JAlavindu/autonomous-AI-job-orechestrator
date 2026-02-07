@@ -79,9 +79,13 @@ class Scheduler:
 
                 else:
                     # AI chose an empty slot (e.g., predicted index 4 but only 2 jobs exist)
-                    # We penalize this slightly so it learns to pick valid indices
-                    # But we also just pick the first available job to keep the system moving
-                    print("[!] AI picked invalid index, falling back to FIFO.")
+                    print(f"[!] AI picked invalid index {action_index} (valid range: 0-{len(runnable_jobs)-1}). Penalizing and falling back.")
+                    
+                    # 1. Penalize the AI for being wrong
+                    penalty_reward = -2.0
+                    self.agent.train_step(current_state, action_index, penalty_reward, current_state, done=False)
+
+                    # 2. Fallback to FIFO so the work actually gets done
                     fallback_job = runnable_jobs[0]
                     await executor.execute_job(fallback_job)
 
