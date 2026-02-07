@@ -20,20 +20,31 @@ class RLAgent:
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         self.loss_fn = torch.nn.MSELoss()
 
-    def select_action(self, state):
+    def select_action(self, state, valid_actions_count=None):
         """
-        Selects an action using Epsilon-Greedy strategy.
-        Returns: Index of the job to pick.
+        Selects an action using Epsilon-Greedy strategy with Action Masking.
+        valid_actions_count: The number of actual runnable jobs available (e.g., 3).
+                             The agent should only pick indices 0, 1, or 2.
         """
-        
-        # Explore: pick random action
+        # Explore: pick random action from VALID range only
         if random.random() < self.epsilon:
+            if valid_actions_count:
+                return random.randint(0, valid_actions_count - 1)
             return random.randint(0, self.action_dim - 1)
         
         # Exploit: pick best action from Neural Net
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q_values = self.policy_net(state_tensor)
+            
+            # Action Masking for Exploit phase
+            if valid_actions_count is not None:
+                # Set Q-values of invalid actions to negative infinity so they are never picked
+                # We create a mask where valid indices are 0 and invalid are -inf
+                mask = torch.full_like(q_values, float('-inf'))
+                mask[0, :valid_actions_count] = 0
+                q_values = q_values + mask
+            
             return q_values.argmax().item()
 
     def train_step(self, state, action, reward, next_state, done):

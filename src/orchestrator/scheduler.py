@@ -41,11 +41,12 @@ class Scheduler:
                     continue
 
                 # 2. Prepare State for AI
-                # We only consider the top N jobs for the state encoding
                 current_state = encode_state(runnable_jobs)
                 
                 # 3. AI Selects Action (Index of the job to run)
-                action_index = self.agent.select_action(current_state)
+                # Pass the count of jobs so the AI knows valid range (e.g., 0 to N-1)
+                valid_count = len(runnable_jobs)
+                action_index = self.agent.select_action(current_state, valid_actions_count=valid_count)
                 
                 # Safety check: Is the chosen index valid?
                 if action_index < len(runnable_jobs):
