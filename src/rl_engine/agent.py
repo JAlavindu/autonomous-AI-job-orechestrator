@@ -1,4 +1,5 @@
 import torch
+import os
 import torch.optim as optim
 import random
 import numpy as np
@@ -79,3 +80,24 @@ class RLAgent:
         # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
+
+    def save_model(self, path: str = "model_checkpoint.pth"):
+        """Saves the Neural Network weights to a file."""
+        try:
+            torch.save(self.policy_net.state_dict(), path)
+            print(f"[*] AI Model saved to {path}")
+        except Exception as e:
+            print(f"[!] Error saving model: {e}")
+
+    def load_model(self, path: str = "model_checkpoint.pth"):
+        """Loads Neural Network weights from a file if it exists."""
+        if os.path.exists(path):
+            try:
+                self.policy_net.load_state_dict(torch.load(path))
+                self.policy_net.eval() # Set to eval mode appropriately
+                print(f"[*] AI Model loaded from {path}")
+            except Exception as e:
+                print(f"[!] Error loading model: {e}")
+        else:
+            print(f"[*] No checkpoint found at {path}, starting with fresh model.")
+        

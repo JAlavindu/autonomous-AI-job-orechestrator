@@ -18,6 +18,10 @@ class Scheduler:
         # Initialize the AI Agent
         # Action Dim = MAX_JOBS_INPUT (It can choose index 0, 1, 2, 3, or 4)
         self.agent = RLAgent(state_dim=INPUT_DIM, action_dim=MAX_JOBS_INPUT)
+
+        # [NEW] Load previous training if available
+        self.agent.load_model("ai_brain.pth")
+
         print(f"[*] AI Agent Initialized on {self.agent.device}")
 
     async def run(self):
@@ -98,6 +102,9 @@ class Scheduler:
     def stop(self):
         self.is_running = False
         print("[*] Scheduler stopping...")
+
+        # [NEW] Save brain on shutdown
+        self.agent.save_model("ai_brain.pth")
 
 # Global scheduler instance
 scheduler = Scheduler()
