@@ -22,6 +22,10 @@ class Scheduler:
         # [NEW] Load previous training if available
         self.agent.load_model("ai_brain.pth")
 
+        # [NEW] Buffer to track jobs currently with workers
+        # Map: job_id -> (state, action_index)
+        self.pending_feedback = {}
+
         print(f"[*] AI Agent Initialized on {self.agent.device}")
 
     async def run(self):
