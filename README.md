@@ -16,6 +16,9 @@ autonomous-ai-job-orchestrator/
        config.py
        orchestrator.py       # Main orchestrator logic
    
+    dashboard/                # Dashboard application
+       app.py
+   
     db/                       # Database interactions
        redis_store.py
    
@@ -27,10 +30,12 @@ autonomous-ai-job-orchestrator/
        executor.py
        job_manager.py
        scheduler.py
+       worker.py             # Worker logic
    
     rl_engine/                # Reinforcement Learning engine
        agent.py
        environment.py
+       model.py
        networks.py
        reward.py
    
