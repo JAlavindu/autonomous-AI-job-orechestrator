@@ -81,4 +81,18 @@ class RedisClient:
             print(f"Redis Error deleting job: {e}")
             return False
             
+    def add_to_queue(self, job_id: str):
+        """Pushes job ID to the processing queue."""
+        self.client.rpush("queue:jobs", job_id)
+
+    def pop_from_queue(self) -> Optional[str]:
+        """
+        Blocking pop from the queue. Waits until a job is available.
+        Returns job_id.
+        """
+        # blpop returns a tuple (key, element), we want the element
+        result = self.client.blpop("queue:jobs", timeout=5)
+        if result:
+            return result[1]
+        return None
 redis_client = RedisClient()
