@@ -4,7 +4,7 @@ import numpy as np
 from typing import List
 from src.models.job import Job, JobStatus
 from src.orchestrator.job_manager import job_manager
-from src.orchestrator.executor import executor
+# from src.orchestrator.executor import executor  <-- REMOVED unused import
 
 # AI Imports
 from src.rl_engine.agent import RLAgent
@@ -14,9 +14,8 @@ class Scheduler:
     def __init__(self, check_interval: float = 2.0):
         self.check_interval = check_interval
         self.is_running = False
-        
+
         # Initialize the AI Agent
-        # Action Dim = MAX_JOBS_INPUT (It can choose index 0, 1, 2, 3, or 4)
         self.agent = RLAgent(state_dim=INPUT_DIM, action_dim=MAX_JOBS_INPUT)
 
         # [NEW] Load previous training if available
@@ -33,7 +32,7 @@ class Scheduler:
         Main loop of the scheduler with AI decision making.
         """
         self.is_running = True
-        print("[*] Scheduler started. Waiting for jobs...")
+        print("[*] Scheduler started (Distributed Mode). Waiting for jobs...")
 
         while self.is_running:
             try:
@@ -44,71 +43,73 @@ class Scheduler:
                 # Filter strictly for dependencies
                 runnable_jobs = [j for j in pending_jobs if job_manager.are_dependencies_met(j)]
 
-                if not runnable_jobs:
-                    await asyncio.sleep(self.check_interval)
-                    continue
+                if runnable_jobs:
+                    # AI Decision
+                    current_state = encode_state(runnable_jobs)
+                    valid_count = min(len(runnable_jobs), MAX_JOBS_INPUT)
+                    
+                    action_index = self.agent.select_action(current_state, valid_actions_count=valid_count)
 
-                # 2. Prepare State for AI
-                current_state = encode_state(runnable_jobs)
-                
-                # 3. AI Selects Action (Index of the job to run)
-                # Pass the count of jobs so the AI knows valid range (e.g., 0 to N-1)
-                valid_count = len(runnable_jobs)
-                action_index = self.agent.select_action(current_state, valid_actions_count=valid_count)
-                
-                # Safety check: Is the chosen index valid?
-                if action_index < len(runnable_jobs):
-                    selected_job = runnable_jobs[action_index]
-                    
-                    print(f"[>] AI chose Job: {selected_job.name} (Index: {action_index})")
-                    
-                    # 4. Execute Job (and wait for result to train)
-                    # Note: In a real massive system, training happens asynchronously.
-                    # Here we await to capture the immediate result for the reward function.
-                    await executor.execute_job(selected_job)
-                    
-                    # Refresh job data to get completion time/status
-                    completed_job = job_manager.get_job(selected_job.id)
-                    
-                    # 5. Calculate Reward
-                    if completed_job and completed_job.status == JobStatus.COMPLETED:
-                        reward = calculate_reward(completed_job)
-                    else:
-                        reward = -1.0 # Failed execution
+                    if action_index < len(runnable_jobs):
+                        selected_job = runnable_jobs[action_index]
+                        print(f"[>] Scheduler Enqueueing Job: {selected_job.name}")
                         
-                    print(f"[$] Reward calculated: {reward}")
+                        # 1. Store state for later training
+                        self.pending_feedback[selected_job.id] = (current_state, action_index)
+                        
+                        # 2. Set status to RUNNING immediately so we don't pick it again
+                        job_manager.update_job_status(selected_job.id, JobStatus.RUNNING, worker_id="queued")
+                        
+                        # 3. Push to Redis Queue using job_manager's internal db reference
+                        # (job_manager.db is the redis_client instance)
+                        job_manager.db.add_to_queue(selected_job.id)
+                    else:
+                        # Fallback for invalid index
+                        job = runnable_jobs[0]
+                        job_manager.update_job_status(job.id, JobStatus.RUNNING, worker_id="queued")
+                        job_manager.db.add_to_queue(job.id)
 
-                    # 6. Train the Agent
-                    # Prepare 'next_state' (state after job is removed)
-                    remaining_jobs = [j for j in runnable_jobs if j.id != selected_job.id]
-                    next_state = encode_state(remaining_jobs)
+                completed_ids = []
+                # We need to use list() here because we might delete keys during iteration in some edge cases
+                # though strictly safe here since we delete in a separate loop, it's good practice.
+                for jid, (state, action) in list(self.pending_feedback.items()):
+                    job = job_manager.get_job(jid)
                     
-                    # Perform Backpropagation
-                    self.agent.train_step(current_state, action_index, reward, next_state, done=False)
+                    # Check if job is finished
+                    if job and job.status in [JobStatus.COMPLETED, JobStatus.FAILED]:
+                        if job.status == JobStatus.COMPLETED:
+                            reward = calculate_reward(job)
+                            print(f"[$] Job Completed: {job.name}. Reward: {reward}")
+                        else:
+                            reward = -5.0 # Penalty for failure
+                            print(f"[!] Job Failed: {job.name}. Penalty: {reward}")
 
-                else:
-                    # AI chose an empty slot (e.g., predicted index 4 but only 2 jobs exist)
-                    print(f"[!] AI picked invalid index {action_index} (valid range: 0-{len(runnable_jobs)-1}). Penalizing and falling back.")
-                    
-                    # 1. Penalize the AI for being wrong
-                    penalty_reward = -2.0
-                    self.agent.train_step(current_state, action_index, penalty_reward, current_state, done=False)
+                        # Estimate next state
+                        latest_jobs = [j for j in job_manager.list_jobs() if j.status == JobStatus.PENDING]
+                        next_state = encode_state(latest_jobs)
+                        
+                        self.agent.train_step(state, action, reward, next_state, done=False)
+                        completed_ids.append(jid)
 
-                    # 2. Fallback to FIFO so the work actually gets done
-                    fallback_job = runnable_jobs[0]
-                    await executor.execute_job(fallback_job)
+                # Cleanup buffer
+                for jid in completed_ids:
+                    del self.pending_feedback[jid]
 
+                await asyncio.sleep(self.check_interval)
+                
             except Exception as e:
                 print(f"[!] Scheduler loop error: {e}")
                 traceback.print_exc()
-                await asyncio.sleep(5)  # Wait longer on error before retrying
+                await asyncio.sleep(5)
 
     def stop(self):
         self.is_running = False
         print("[*] Scheduler stopping...")
-
-        # [NEW] Save brain on shutdown
         self.agent.save_model("ai_brain.pth")
 
-# Global scheduler instance
+
 scheduler = Scheduler()
+
+
+
+
