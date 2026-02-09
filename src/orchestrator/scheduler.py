@@ -4,7 +4,7 @@ import numpy as np
 from typing import List
 from src.models.job import Job, JobStatus
 from src.orchestrator.job_manager import job_manager
-# from src.orchestrator.executor import executor  <-- REMOVED unused import
+from datetime import datetime
 
 # AI Imports
 from src.rl_engine.agent import RLAgent
@@ -31,6 +31,7 @@ class Scheduler:
         """
         Main loop of the scheduler with AI decision making.
         """
+        JOB_TIMEOUT_SECONDS = 30.0 
         self.is_running = True
         print("[*] Scheduler started (Distributed Mode). Waiting for jobs...")
 
@@ -42,6 +43,23 @@ class Scheduler:
                 
                 # Filter strictly for dependencies
                 runnable_jobs = [j for j in pending_jobs if job_manager.are_dependencies_met(j)]
+
+                running_jobs = [j for j in all_jobs if j.status == JobStatus.RUNNING]
+                now = datetime.utcnow()
+                
+                for job in running_jobs:
+                    # Ignore jobs that are just "queued" (haven't been picked up by worker yet)
+                    # or check specifically for jobs that have a started_at time
+                    if job.started_at:
+                        runtime = (now - job.started_at).total_seconds()
+                        
+                        # Use a generous buffer or the job's own estimate * factor
+                        # For this demo, we use a hard limit
+                        if runtime > JOB_TIMEOUT_SECONDS:
+                            print(f"[!] Job {job.name} ({job.id}) timed out after {runtime:.2f}s. Marking FAILED.")
+                            
+                            # Mark as FAILED
+                            job_manager.update_job_status(job.id, JobStatus.FAILED)
 
                 if runnable_jobs:
                     # AI Decision
