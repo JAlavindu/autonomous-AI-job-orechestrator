@@ -27,6 +27,7 @@ class Job(JobBase):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     status: JobStatus = JobStatus.PENDING
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     retry_count: int = 0
     worker_id: Optional[str] = None
