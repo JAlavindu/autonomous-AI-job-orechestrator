@@ -3,7 +3,12 @@ import pandas as pd
 import redis
 import json
 import time
+import os
 from datetime import datetime
+
+# [FIX] Read from Environment Variable, default to localhost
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
 # Connect to Redis directly to fetch data
 r = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
