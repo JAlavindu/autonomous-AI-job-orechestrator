@@ -1,6 +1,7 @@
 version: '3.8'
 
 services:
+  # 1. Database
   redis:
     image: redis:7-alpine
     ports:
@@ -8,6 +9,43 @@ services:
     volumes:
       - redis_data:/data
 
+  # 2. Main API & Scheduler (The Brain)
+  api:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    volumes:
+      - .:/app  # Hot-reload code changes
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+
+  # 3. Worker (The Muscle) - Can be scaled!
+  worker:
+    build: .
+    command: python src/orchestrator/worker.py
+    volumes:
+      - .:/app
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+      - api
+
+  # 4. Dashboard (The Eyes)
+  dashboard:
+    build: .
+    command: streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    volumes:
+      - .:/app
+    ports:
+      - "8501:8501"
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
 
 volumes:
   redis_data:
