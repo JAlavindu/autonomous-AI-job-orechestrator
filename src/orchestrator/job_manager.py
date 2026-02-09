@@ -7,10 +7,29 @@ class JobManager:
     def __init__(self):
         self.db = redis_client
 
-    def create_job(self, job_create: JobCreate) -> Job:
-        """Creates a new job, saves it to the DB, and returns the Job object."""
-        # Create full Job object from JobCreate data (ID and defaults are auto-generated)
-        job = Job(**job_create.model_dump())
+    def create_job(self, job_id: str, status: JobStatus, worker_id: Optional[str] = None) -> Optional[Job]:
+        """Create & update a job, sets completion time if applicable, saves it to the DB, and returns the Job object."""
+        job = self.get_job(job_id)
+        if not job:
+            return None
+
+        # Capture start time when transitioning to RUNNING
+        if status == JobStatus.RUNNING and job.status != JobStatus.RUNNING:
+            job.started_at = datetime.utcnow()
+
+        job.status = status
+        
+        if worker_id:
+            job.worker_id = worker_id
+
+        if status == JobStatus.COMPLETED:
+            job.completed_at = datetime.utcnow()
+        elif status == JobStatus.RETRYING:
+            job.retry_count += 1
+        elif status == JobStatus.FAILED:
+            # Maybe reset worker_id so it's clear no one is working on it
+            pass
+        
         self.db.save_job(job)
         return job
 
