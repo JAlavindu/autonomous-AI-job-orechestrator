@@ -1,44 +1,43 @@
-autonomous-ai-job-orchestrator/
-│
-├── src/                          # Source code
-│   ├── orchestrator/             # Core orchestrator logic
-│   │   ├── __init__.py
-│   │   ├── orchestrator.py       # Main orchestrator class
-│   │   ├── job_manager.py        # Job management logic
-│   │   ├── scheduler.py          # Scheduling logic
-│   │   ├── executor.py           # Job execution logic
-│   │   └── utils.py              # Utility functions
-│   │
-│   ├── ai_models/                # AI models and related code
-│   │   ├── __init__.py
-│   │   ├── model.py              # Model definition
-│   │   ├── training.py           # Training logic
-│   │   └── inference.py          # Inference logic
-│   │
-│   ├── data/                     # Data handling
-│   │   ├── __init__.py
-│   │   ├── data_loader.py        # Data loading logic
-│   │   ├── data_preprocessing.py  # Data preprocessing logic
-│   │   └── data_utils.py         # Utility functions for data
-│   │
-│   ├── config/                   # Configuration files
-│   │   ├── __init__.py
-│   │   ├── config.yaml           # Main configuration file
-│   │   └── logging.yaml          # Logging configuration
-│   │
-│   ├── tests/                    # Unit and integration tests
-│   │   ├── __init__.py
-│   │   ├── test_orchestrator.py  # Tests for orchestrator
-│   │   ├── test_job_manager.py   # Tests for job manager
-│   │   └── test_ai_models.py     # Tests for AI models
-│   │
-│   └── main.py                   # Entry point for the application
-│
-├── scripts/                      # Utility scripts
-│   ├── run_jobs.py               # Script to run jobs
-│   └── monitor_jobs.py           # Script to monitor jobs
-│
-├── requirements.txt              # Python dependencies
-├── README.md                     # Project documentation
-├── .gitignore                    # Git ignore file
-└── Dockerfile                    # Dockerfile for containerization
+from fastapi.testclient import TestClient
+from src.main import app
+from src.db.redis_store import redis_client
+
+client = TestClient(app)
+
+def setup_module(module):
+    """Run before tests: Clean DB"""
+    redis_client.client.flushall()
+
+def test_root():
+    response = client.get("/")
+    assert response.status_code == 200
+    assert response.json() == {"message": "Autonomous AI Job Orchestrator is running"}
+
+def test_create_job():
+    payload = {
+        "name": "Unit Test Job",
+        "priority": 5,
+        "estimated_duration": 10
+    }
+    response = client.post("/api/v1/jobs/", json=payload)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["name"] == "Unit Test Job"
+    assert "id" in data
+    assert data["status"] == "PENDING"
+
+def test_job_persistence():
+    # Create a job
+    payload = {"name": "Persistent Job", "priority": 10, "estimated_duration": 5}
+    create_res = client.post("/api/v1/jobs/", json=payload)
+    job_id = create_res.json()["id"]
+
+    # Retrieve it
+    get_res = client.get(f"/api/v1/jobs/{job_id}")
+    assert get_res.status_code == 200
+    assert get_res.json()["id"] == job_id
+    assert get_res.json()["priority"] == 10
+
+def test_get_nonexistent_job():
+    response = client.get("/api/v1/jobs/non-existent-id")
+    assert response.status_code == 404
