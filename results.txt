@@ -1,0 +1,20 @@
+==================================================
+🚀 BENCHMARK RESULTS
+==================================================
+
+--- FIFO ---
+Missed Deadlines:        42 / 100
+High-Priority Misses:    10
+Avg Latency (Seconds):   82.65s
+
+--- Priority ---
+Missed Deadlines:        49 / 100
+High-Priority Misses:    1
+Avg Latency (Seconds):   84.51s
+
+--- AI (DQN) ---
+Missed Deadlines:        39 / 100
+High-Priority Misses:    10
+Avg Latency (Seconds):   82.56s
+
+==================================================

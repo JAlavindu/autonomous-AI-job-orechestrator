@@ -8,7 +8,7 @@ from src.rl_engine.agent import RLAgent
 from src.rl_engine.environment import encode_state, calculate_reward
 
 # Training Hyperparameters
-NUM_EPISODES = 50       # Number of full queue clears
+NUM_EPISODES = 500       # Number of full queue clears
 JOBS_PER_EPISODE = 100  # Number of jobs per queue
 
 def generate_training_jobs():
