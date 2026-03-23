@@ -7,7 +7,7 @@ import copy
 # Adjust imports based on your actual class names
 from src.models.job import Job
 from src.rl_engine.agent import RLAgent
-from src.rl_engine.environment import JobEnvironment
+from src.rl_engine.environment import encode_state
 import torch
 
 NUM_JOBS = 100
@@ -102,7 +102,6 @@ def simulate_ai(jobs):
     except Exception as e:
         print("  [Warn] Could not load ai_brain.pth. AI will run untrained.", e)
 
-    env = JobEnvironment()
     pending_jobs = list(jobs)
 
     while pending_jobs:
@@ -110,7 +109,7 @@ def simulate_ai(jobs):
         window = pending_jobs[:action_size]
         
         # Get AI decision
-        state = env.encode_state(window)
+        state = encode_state(window)
         valid_count = len(window)
         action_idx = agent.select_action(state, valid_count)
         
