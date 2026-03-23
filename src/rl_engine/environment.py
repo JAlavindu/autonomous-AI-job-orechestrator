@@ -26,9 +26,10 @@ def get_job_features(job: Job) -> List[float]:
     # 3. Slack Time (Deadline - Now - Duration)
     if job.deadline:
         time_left = (job.deadline - now).total_seconds()
-        slack = (time_left - job.estimated_duration) / 3600.0 # In hours
+        slack_seconds = time_left - job.estimated_duration
+        slack = slack_seconds / 50.0 # In hours
     else:
-        slack = 1.0 # High slack if no deadline
+        slack = 5.0 # High slack if no deadline
         
     return [prio, dur, slack]
 

@@ -22,7 +22,7 @@ def generate_training_jobs():
             priority=random.randint(1, 10),
             estimated_duration=random.uniform(0.5, 3.0),
             # Mix of tight and loose deadlines
-            deadline=now + timedelta(seconds=random.uniform(1.0, 15.0)),
+            deadline=now + timedelta(seconds=random.uniform(10.0, 175.0)),
             status="PENDING",
             created_at=now
         ))

@@ -22,7 +22,7 @@ def generate_test_jobs():
             name=f"BenchJob-{random.randint(1000, 9999)}",
             priority=random.randint(1, 10),
             estimated_duration=random.uniform(0.5, 3.0), # seconds
-            deadline=now + timedelta(seconds=random.uniform(2.0, 15.0)),
+            deadline=now + timedelta(seconds=random.uniform(10.0, 175.0)),
             status="PENDING",
             created_at=now
         )
