@@ -6,7 +6,7 @@ import copy
 
 # Adjust imports based on your actual class names
 from src.models.job import Job
-from src.rl_engine.agent import DQNAgent
+from src.rl_engine.agent import RLAgent
 from src.rl_engine.environment import JobEnvironment
 import torch
 
@@ -93,11 +93,11 @@ def simulate_ai(jobs):
     # (Assuming state size=15 and action size=5 based on standard DQN setup)
     state_size = 15  
     action_size = 5  
-    agent = DQNAgent(state_size, action_size)
+    agent = RLAgent(state_size, action_size)
     
     # Load pre-trained brain if it exists
     try:
-        agent.model.load_state_dict(torch.load("ai_brain.pth"))
+        agent.policy_net.load_state_dict(torch.load("ai_brain.pth"))
         agent.epsilon = 0.0 # Force greedy/exploitation mode for benchmarking
     except Exception as e:
         print("  [Warn] Could not load ai_brain.pth. AI will run untrained.", e)
@@ -112,7 +112,7 @@ def simulate_ai(jobs):
         # Get AI decision
         state = env.encode_state(window)
         valid_count = len(window)
-        action_idx = agent.act(state, valid_count)
+        action_idx = agent.select_action(state, valid_count)
         
         # Sanity check action
         if action_idx >= valid_count:
