@@ -4,7 +4,7 @@ from src.models.job import Job
 from datetime import datetime, timezone
 
 # Configuration
-MAX_JOBS_INPUT = 5  # The AI looks at the top 5 jobs max at a time
+MAX_JOBS_INPUT = 15  # The AI looks at the top 5 jobs max at a time
 FEATURES_PER_JOB = 3 # Priority, Duration, Slack Time
 INPUT_DIM = MAX_JOBS_INPUT * FEATURES_PER_JOB
 

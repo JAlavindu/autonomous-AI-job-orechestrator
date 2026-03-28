@@ -91,8 +91,8 @@ def simulate_ai(jobs):
     
     # Setup AI components
     # (Assuming state size=15 and action size=5 based on standard DQN setup)
-    state_size = 15  
-    action_size = 5  
+    state_size = 45  
+    action_size = 15  
     agent = RLAgent(state_size, action_size)
     
     # Load pre-trained brain if it exists
@@ -105,8 +105,6 @@ def simulate_ai(jobs):
     pending_jobs = list(jobs)
 
     while pending_jobs:
-        # Pre-sort so the AI's window contains a mix of urgent/important jobs it can choose from
-        pending_jobs.sort(key=lambda j: (-j.priority, j.deadline))
         
         # Take up to top 5 jobs for observation
         window = pending_jobs[:action_size]

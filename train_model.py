@@ -31,8 +31,8 @@ def generate_training_jobs():
 def train():
     print(f"🧠 Starting AI Training for {NUM_EPISODES} episodes...")
     
-    state_size = 15
-    action_size = 5
+    state_size = 45
+    action_size = 15
     agent = RLAgent(state_size, action_size)
     
     total_rewards = []
@@ -44,7 +44,6 @@ def train():
         
         while pending_jobs:
             # 1. Observe State
-            pending_jobs.sort(key=lambda j: (-j.priority, j.deadline)) # <-- Add this line
             window = pending_jobs[:action_size]
             state = encode_state(window, current_time)
             valid_count = len(window)
@@ -70,7 +69,6 @@ def train():
             
             # 5. Determine Next State
             pending_jobs.remove(selected_job)
-            pending_jobs.sort(key=lambda j: (-j.priority, j.deadline)) # <-- Add this line
             next_window = pending_jobs[:action_size]
             next_state = encode_state(next_window, current_time)
             done = len(pending_jobs) == 0
