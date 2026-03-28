@@ -77,6 +77,7 @@ def simulate_priority(jobs):
     
     for job in sorted_jobs:
         current_time += timedelta(seconds=job.estimated_duration)
+        state = encode_state(window, current_time)
         job.completed_at = current_time
         job.status = "COMPLETED"
         completed.append(job)

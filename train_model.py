@@ -45,7 +45,7 @@ def train():
         while pending_jobs:
             # 1. Observe State
             window = pending_jobs[:action_size]
-            state = encode_state(window)
+            state = encode_state(window, current_time)
             valid_count = len(window)
             
             # 2. Select Action
@@ -70,7 +70,7 @@ def train():
             # 5. Determine Next State
             pending_jobs.remove(selected_job)
             next_window = pending_jobs[:action_size]
-            next_state = encode_state(next_window)
+            next_state = encode_state(next_window, current_time)
             done = len(pending_jobs) == 0
             
             # 6. Train the Neural Network

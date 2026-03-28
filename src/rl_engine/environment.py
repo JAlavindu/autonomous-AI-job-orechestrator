@@ -1,5 +1,4 @@
 import numpy as np
-from datetime import datetime
 from typing import List
 from src.models.job import Job
 from datetime import datetime, timezone
@@ -9,32 +8,24 @@ MAX_JOBS_INPUT = 5  # The AI looks at the top 5 jobs max at a time
 FEATURES_PER_JOB = 3 # Priority, Duration, Slack Time
 INPUT_DIM = MAX_JOBS_INPUT * FEATURES_PER_JOB
 
-def get_job_features(job: Job) -> List[float]:
-    """
-    Extracts numerical features from a single job.
-    1. Priority (Normalized 1-10)
-    2. Estimated Duration (Normalized assumption: max 100s)
-    3. Slack Time (Time until deadline in seconds)
-    """
-    now = datetime.now(timezone.utc)
+def get_job_features(job: Job, current_time=None) -> List[float]:
+    """ ... """
+    # Use simulated time if provided, else real time
+    now = current_time if current_time else datetime.now(timezone.utc)
     
-    # 1. Priority
     prio = job.priority / 10.0
+    dur = job.estimated_duration / 100.0
     
-    # 2. Duration
-    dur = job.estimated_duration / 100.0 # Normalize assuming max 100s tasks
-    
-    # 3. Slack Time (Deadline - Now - Duration)
     if job.deadline:
         time_left = (job.deadline - now).total_seconds()
         slack_seconds = time_left - job.estimated_duration
-        slack = slack_seconds / 50.0 # In hours
+        slack = slack_seconds / 50.0 
     else:
-        slack = 5.0 # High slack if no deadline
+        slack = 5.0
         
     return [prio, dur, slack]
 
-def encode_state(pending_jobs: List[Job]) -> np.array:
+def encode_state(pending_jobs: List[Job], current_time=None) -> np.array:
     """
     Converts a list of pending Job objects into a flat numpy array
     suitable for the Neural Network.
@@ -43,13 +34,12 @@ def encode_state(pending_jobs: List[Job]) -> np.array:
     # Sort roughly by submission or simple priority first to get a candidate list
     # For now, we take the first N jobs available
     candidates = pending_jobs[:MAX_JOBS_INPUT]
-    
     feature_list = []
     
     for job in candidates:
-        feature_list.extend(get_job_features(job))
+        # Pass current_time down to the feature extractor
+        feature_list.extend(get_job_features(job, current_time))
         
-    # Pad with zeros if we have fewer than MAX_JOBS_INPUT jobs
     remaining_slots = MAX_JOBS_INPUT - len(candidates)
     if remaining_slots > 0:
         feature_list.extend([0.0] * (remaining_slots * FEATURES_PER_JOB))
