@@ -1,7 +1,7 @@
 import uuid
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from src.models.job import Job
 from src.rl_engine.agent import RLAgent
@@ -14,7 +14,7 @@ JOBS_PER_EPISODE = 100  # Number of jobs per queue
 def generate_training_jobs():
     """Generates a randomized batch of jobs for an episode."""
     jobs = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for _ in range(JOBS_PER_EPISODE):
         jobs.append(Job(
             id=str(uuid.uuid4()),
@@ -39,7 +39,7 @@ def train():
     
     for episode in range(1, NUM_EPISODES + 1):
         pending_jobs = generate_training_jobs()
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         episode_reward = 0
         
         while pending_jobs:

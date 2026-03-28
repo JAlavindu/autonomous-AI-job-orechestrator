@@ -2,6 +2,7 @@ import numpy as np
 from datetime import datetime
 from typing import List
 from src.models.job import Job
+from datetime import datetime, timezone
 
 # Configuration
 MAX_JOBS_INPUT = 5  # The AI looks at the top 5 jobs max at a time
@@ -15,7 +16,7 @@ def get_job_features(job: Job) -> List[float]:
     2. Estimated Duration (Normalized assumption: max 100s)
     3. Slack Time (Time until deadline in seconds)
     """
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     
     # 1. Priority
     prio = job.priority / 10.0

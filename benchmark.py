@@ -1,7 +1,7 @@
 import time
 import uuid
 import random
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import copy
 
 # Adjust imports based on your actual class names
@@ -15,7 +15,7 @@ NUM_JOBS = 100
 def generate_test_jobs():
     """Generates a consistent batch of jobs to test across all schedulers."""
     jobs = []
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     for _ in range(NUM_JOBS):
         job = Job(
             id=str(uuid.uuid4()),
@@ -54,7 +54,7 @@ def evaluate_metrics(completed_jobs):
 def simulate_fifo(jobs):
     """Baseline 1: Processes jobs in the exact order they arrive."""
     print("Running FIFO Benchmark...")
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     completed = []
     
     # FIFO preserves the original generation/arrival order
@@ -69,7 +69,7 @@ def simulate_fifo(jobs):
 def simulate_priority(jobs):
     """Baseline 2: Processes jobs sorted by Priority (High to Low), then Deadline."""
     print("Running Priority Benchmark...")
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     completed = []
     
     # Sort by priority (descending), then deadline (ascending)
@@ -86,7 +86,7 @@ def simulate_priority(jobs):
 def simulate_ai(jobs):
     """Baseline 3: Uses the trained DQN Agent to pick the best job index."""
     print("Running AI (DQN) Benchmark...")
-    current_time = datetime.utcnow()
+    current_time = datetime.now(timezone.utc)
     completed = []
     
     # Setup AI components
