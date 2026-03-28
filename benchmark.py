@@ -77,7 +77,6 @@ def simulate_priority(jobs):
     
     for job in sorted_jobs:
         current_time += timedelta(seconds=job.estimated_duration)
-        state = encode_state(window, current_time)
         job.completed_at = current_time
         job.status = "COMPLETED"
         completed.append(job)
@@ -106,11 +105,14 @@ def simulate_ai(jobs):
     pending_jobs = list(jobs)
 
     while pending_jobs:
+        # Pre-sort so the AI's window contains a mix of urgent/important jobs it can choose from
+        pending_jobs.sort(key=lambda j: (-j.priority, j.deadline))
+        
         # Take up to top 5 jobs for observation
         window = pending_jobs[:action_size]
         
         # Get AI decision
-        state = encode_state(window)
+        state = encode_state(window, current_time)
         valid_count = len(window)
         action_idx = agent.select_action(state, valid_count)
         
