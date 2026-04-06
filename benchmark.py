@@ -14,6 +14,15 @@ NUM_JOBS = 100
 
 def generate_test_jobs():
     """Generates a consistent batch of jobs to test across all schedulers."""
+    
+    # LOCK REPRODUCIBILITY FOR PRESENTATION 
+    random.seed(42)  
+    import torch
+    import numpy as np
+    np.random.seed(42)
+    torch.manual_seed(42)
+    # -----------------------------------
+    
     jobs = []
     now = datetime.now(timezone.utc)
     for _ in range(NUM_JOBS):
@@ -21,7 +30,7 @@ def generate_test_jobs():
             id=str(uuid.uuid4()),
             name=f"BenchJob-{random.randint(1000, 9999)}",
             priority=random.randint(1, 10),
-            estimated_duration=random.uniform(0.5, 3.0), # seconds
+            estimated_duration=random.uniform(0.5, 3.0),
             deadline=now + timedelta(seconds=random.uniform(10.0, 175.0)),
             status="PENDING",
             created_at=now
@@ -105,6 +114,8 @@ def simulate_ai(jobs):
     pending_jobs = list(jobs)
 
     while pending_jobs:
+
+        pending_jobs.sort(key=lambda j: j.deadline)
         
         # Take up to top 5 jobs for observation
         window = pending_jobs[:action_size]

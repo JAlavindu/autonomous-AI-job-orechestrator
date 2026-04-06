@@ -43,6 +43,7 @@ def train():
         episode_reward = 0
         
         while pending_jobs:
+            pending_jobs.sort(key=lambda j: j.deadline)
             # 1. Observe State
             window = pending_jobs[:action_size]
             state = encode_state(window, current_time)
