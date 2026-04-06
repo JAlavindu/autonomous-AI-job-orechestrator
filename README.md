@@ -89,9 +89,9 @@ Evaluate the trained AI against standard FIFO and strict Priority queues over a 
 python benchmark.py
 ```
 *Empirical Results:*
-- **FIFO**: 42 Missed Deadlines
-- **Strict Priority**: 49 Missed Deadlines (Suffers from **Starvation** of low-priority tasks)
-- **AI (DQN)**: 39 Missed Deadlines (Balancing both priority and deadlines optimally)
+- **FIFO**: 52 Missed Deadlines
+- **Strict Priority**: 52 Missed Deadlines (Suffers from **Starvation** of low-priority tasks)
+- **AI (DQN)**: 49 Missed Deadlines (Balancing both priority and deadlines optimally)
 
 ### 3. Live Workload Simulation
 Generates 50 random jobs to flood the live queue while the Docker cluster is running.
@@ -114,13 +114,13 @@ python test_dag.py
 The system uses Reinforcement Learning (RL) to make decisions.
 
 1.  **Observation (State)**:
-    The Scheduler looks at the top 5 pending jobs. For each job, it calculates:
+    The Scheduler looks at the top 15 pending jobs. For each job, it calculates:
     *   `Priority` (Normalized 0-1)
     *   `Duration` (Normalized)
     *   `Slack Time` (Scaled mathematically over an impending threshold so the Neural Network properly detects urgency)
 
 2.  **Decision (Action)**:
-    The **DQN Agent** predicts which index (0-4) has the highest "Q-Value" (Expected future reward).
+    The **DQN Agent** predicts which index (0-14) has the highest "Q-Value" (Expected future reward).
 
 3.  **Feedback (Reward)**:
     After a job finishes, the environment calculates a reward score:
