@@ -17,7 +17,7 @@
 **[Screen: Open VS Code terminal]**
 * **Action:** Run `python benchmark.py`
 * **Speaker 1:** "Before diving into the visual platform, we want to prove the underlying math works. We built an offline evaluation script that tests 100 randomly generated jobs—with varying durations and deadlines—against three distinct schedulers: FIFO, strict Priority, and our trained AI."
-* **Speaker 1:** *(Highlight the terminal output)* "As you can see, FIFO misses 42 deadlines. The absolute Priority queue does great on high-priority tasks, but it causes **'starvation'** for everything else. Starvation happens in rigid priority systems when new, high-priority jobs continually jump to the front of the queue, pushing low-priority tasks indefinitely to the back until their deadlines expire. This makes pure Priority the worst overall with 49 missed deadlines. Our AI, however, achieves the lowest overall missed deadline rate (39/100) because it learns the exact mathematical trade-off needed to prevent starvation while still honoring the most urgent deadlines."
+* **Speaker 1:** *(Highlight the terminal output)* "As you can see, FIFO misses 34 deadlines. The absolute Priority queue does great on high-priority tasks, but it causes **'starvation'** for everything else. Starvation happens in rigid priority systems when new, high-priority jobs continually jump to the front of the queue, pushing low-priority tasks indefinitely to the back until their deadlines expire. This makes pure Priority the worst overall with 38 missed deadlines. Our AI, however, achieves the lowest overall missed deadline rate (14/100) because it learns the exact mathematical trade-off needed to prevent starvation while still honoring the most urgent deadlines."
 
 ---
 

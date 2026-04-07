@@ -33,7 +33,7 @@ The system was validated using a four-tiered approach:
 
 ![Benchmark Results](benchmark_results.png)
 
-*The terminal output confirms the AI achieves the lowest number of missed deadlines (49/100) compared to the static baselines (52/100), successfully balancing high-priority tasks while preventing low-priority starvation.*
+*The terminal output confirms the AI achieves the lowest number of missed deadlines (14/100) compared to the static baselines (FIFO: 34/100, Priority: 38/100), successfully balancing high-priority tasks while preventing low-priority starvation.*
 
 **Status:** ✅ **PASS**
 
@@ -81,7 +81,7 @@ The system was validated using a four-tiered approach:
 ## 4. Conclusion & Declaration of Readiness
 The findings detailed in this report confirm that the **Autonomous AI Job Orchestrator** meets all functional and non-functional requirements outlined in the initial Requirements Analysis Document. 
 
-1. **Self-Optimization:** The RL model works as intended, achieving the lowest missed-deadline metric (39%) compared to industry baselines.
+1. **Self-Optimization:** The RL model works as intended, achieving the lowest missed-deadline metric (14%) compared to industry baselines.
 2. **Resilience:** The Docker-based clustered architecture cleanly isolates processes, ensuring thread safety and scale.
 3. **Graph Control:** Strict DAG processing is upheld.
 
