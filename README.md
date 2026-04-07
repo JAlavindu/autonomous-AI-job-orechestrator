@@ -89,9 +89,9 @@ Evaluate the trained AI against standard FIFO and strict Priority queues over a 
 python benchmark.py
 ```
 *Empirical Results:*
-- **FIFO**: 52 Missed Deadlines
-- **Strict Priority**: 52 Missed Deadlines (Suffers from **Starvation** of low-priority tasks)
-- **AI (DQN)**: 49 Missed Deadlines (Balancing both priority and deadlines optimally)
+- **FIFO**: 34 Missed Deadlines
+- **Strict Priority**: 38 Missed Deadlines (Suffers from **Starvation** of low-priority tasks)
+- **AI (DQN)**: 14 Missed Deadlines (Balancing both priority and deadlines optimally)
 
 ### 3. Live Workload Simulation
 Generates 50 random jobs to flood the live queue while the Docker cluster is running.

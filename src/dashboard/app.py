@@ -20,15 +20,26 @@ st.title("🤖 Autonomous AI Job Orchestrator Dashboard")
 st.sidebar.header("📊 Benchmark Results")
 st.sidebar.markdown("Offline evaluation comparing **100 identical randomized jobs** across different schedulers:")
 
-benchmark_data = pd.DataFrame({
-    "Scheduler": ["AI (DQN)", "FIFO", "Strict Priority"],
-    "Missed Deadlines": [39, 42, 49]
-}).set_index("Scheduler")
+benchmark_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "benchmark_results.json")
+if os.path.exists(benchmark_file):
+    with open(benchmark_file, "r") as f:
+        data = json.load(f)
+    benchmark_data = pd.DataFrame({
+        "Scheduler": list(data.keys()),
+        "Missed Deadlines": list(data.values())
+    }).set_index("Scheduler")
+else:
+    # Fallback to defaults if the benchmark hasn't been run yet
+    benchmark_data = pd.DataFrame({
+        "Scheduler": ["AI (DQN)", "FIFO", "Strict Priority"],
+        "Missed Deadlines": [39, 42, 49]
+    }).set_index("Scheduler")
 
 # Streamlit native bar chart
 st.sidebar.bar_chart(benchmark_data)
 st.sidebar.caption("🏆 **AI Wins:** Lowest missed deadline rate. Effectively balances urgency and prevents low-priority starvation.")
 st.sidebar.divider()
+
 
 # Auto-refresh every 2 seconds
 if st.button('Refresh Data'):
