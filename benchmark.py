@@ -3,6 +3,7 @@ import uuid
 import random
 from datetime import datetime, timedelta, timezone
 import copy
+import json
 
 # Adjust imports based on your actual class names
 from src.models.job import Job
@@ -169,6 +170,15 @@ def run_benchmarks():
         print(f"Avg Latency (Seconds):   {r['avg_latency']:.2f}s")
     
     print("\n" + "="*50)
+
+    output_data = {
+        "AI (DQN)": results_ai["missed_deadlines"],
+        "FIFO": results_fifo["missed_deadlines"],
+        "Strict Priority": results_priority["missed_deadlines"]
+    }
+    
+    with open("benchmark_results.json", "w") as f:
+        json.dump(output_data, f)
 
 if __name__ == "__main__":
     run_benchmarks()
