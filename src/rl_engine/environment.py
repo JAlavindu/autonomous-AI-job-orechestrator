@@ -25,7 +25,7 @@ def get_job_features(job: Job, current_time=None) -> List[float]:
         
     return [prio, dur, slack]
 
-def encode_state(pending_jobs: List[Job], current_time=None) -> np.array:
+def  encode_state(pending_jobs: List[Job], current_time=None) -> np.array:
     """
     Converts a list of pending Job objects into a flat numpy array
     suitable for the Neural Network.
@@ -59,8 +59,8 @@ def calculate_reward(job: Job) -> float:
     # Check Deadline
     if job.deadline and job.completed_at:
         if job.completed_at <= job.deadline:
-            reward += 5.0 # Big bonus for meeting deadline
+            reward += 10.0 # Big bonus for meeting deadline
         else:
-            reward -= 5.0 # Penalty for missing it
+            reward -= 10.0 # Penalty for missing it
             
     return reward
