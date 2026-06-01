@@ -10,7 +10,7 @@
 ## 1. Introduction
 
 ### 1.1 Purpose
-The purpose of this document is to define the functional and non-functional requirements for the **Autonomous AI Job Orchestrator**. This system is designed to replace traditional static job schedulers (FIFO, Round-Robin) with an intelligent, self-optimizing engine powered by Reinforcement Learning (Deep Q-Networks). The system focuses on handling autonomous workloads with distinct priorities, deadlines, and dependencies.
+The purpose of this document is to define the func tional and non-functional requirements for the **Autonomous AI Job Orchestrator**. This system is designed to replace traditional static job schedulers (FIFO, Round-Robin) with an intelligent, self-optimizing engine powered by Reinforcement Learning (Deep Q-Networks). The system focuses on handling autonomous workloads with distinct priorities, deadlines, and dependencies.
 
 ### 1.2 Scope
 The system acts as a central control plane for distributed job execution. It includes:
