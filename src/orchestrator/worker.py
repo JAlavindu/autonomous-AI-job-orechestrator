@@ -3,6 +3,7 @@ import time
 from src.db.redis_store import redis_client
 from src.orchestrator.job_manager import job_manager
 from src.models.job import JobStatus
+from src.orchestrator.executors.registry import execute_job
 
 def run_worker(worker_id: str):
     print(f"[*] Worker {worker_id} started. Waiting for jobs...")
@@ -25,6 +26,23 @@ def run_worker(worker_id: str):
             
             # 3. Update Status to RUNNING
             job_manager.update_job_status(job_id, JobStatus.RUNNING, worker_id=worker_id)
+
+            result = execute_job(job)
+
+            if result.success:
+                job_manager.update_job_status(job_id, JobStatus.COMPLETED)
+                print(f"[{worker_id}] Finished Job: {job.name} ({result.duration_seconds:.2f}s)")
+                if result.stdout:
+                    print(f" stdout: {result.stdout[:500]}")
+            else:
+                job_manager.update_job_status(job_id, JobStatus.FAILED)
+                print(f"[{worker_id}] Failed Job: {job.name} ({result.duration_seconds:.2f}s)")
+                if result.error_message:
+                    print(f" error: {result.error_message}")
+                if result.stderr:
+                    print(f" stderr: {result.stderr[:500]}...")
+                
+                    
             
             # 4. Simulate Work (Sleep)
             # In real life, this is where Docker/K8s logic goes

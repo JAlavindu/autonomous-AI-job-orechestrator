@@ -3,3 +3,6 @@ def echo_message(message: str = "hello") -> str:
 
 def failing_task() -> None:
     raise ValueError("Intentional failure for testing")
+
+def resize_image(input_path: str, output_path: str, width: int = 100) -> str:
+    ...
