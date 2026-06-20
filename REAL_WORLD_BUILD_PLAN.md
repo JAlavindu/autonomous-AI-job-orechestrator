@@ -219,6 +219,48 @@ Each phase is independently shippable and leaves the system in a working state. 
 
 **Exit criteria:** push-button deploys with rollback; UI/CLI/SDK cover the full lifecycle; load tests meet SLAs.
 
+### Phase 7 — Ship it: go-live, distribution, and day-2 operations (2–4 weeks)
+This is the bridge from "deployable" to "actually in real-world use by real users."
+
+**Step 1 — Pick a delivery/distribution model** (drives everything else):
+
+| Model | What it means | Best when | Key work |
+|-------|---------------|-----------|----------|
+| **SaaS (managed, multi-tenant)** | You host it; users sign up and submit jobs | Fast adoption, you control infra | Billing/metering, sign-up flow, tenant onboarding, public status page |
+| **Self-hosted / on-prem** | Customers deploy via Helm chart in their own cluster | Enterprise, data-residency/security needs | Packaged Helm chart, install docs, license keys, air-gapped support |
+| **Single-tenant managed** | One dedicated instance per customer | Regulated/high-trust customers | Per-tenant IaC, isolated infra, dedicated upgrades |
+
+> Recommendation: start **self-hosted Helm chart** (lowest operational burden, lets early adopters run it in their own infra) and add **managed SaaS** once the product stabilizes.
+
+**Step 2 — Release & versioning strategy:**
+- [ ] **Semantic versioning** for API, SDK, CLI, and the Helm chart; publish a `CHANGELOG.md`.
+- [ ] **API versioning** already namespaced (`/api/v1`); commit to backward-compatibility within a major version + a deprecation policy.
+- [ ] **Release channels**: `edge` → `beta` → `stable`; automated release notes from CI.
+- [ ] **Forward-only DB migrations** (Alembic) with tested **upgrade and rollback** paths; never break a running customer on upgrade.
+- [ ] Publish artifacts: container images to a registry, SDK to PyPI/npm, CLI binaries, Helm chart to a chart repo.
+
+**Step 3 — Go-live rollout (phased, not big-bang):**
+- [ ] **Internal dogfood**: run your own workloads on it for 1–2 weeks.
+- [ ] **Private pilot / design partners**: 2–3 friendly teams, tight feedback loop, AI in **shadow mode** first.
+- [ ] **Public beta**: open sign-up/self-host with clear "beta" expectations and feedback channel.
+- [ ] **GA**: published SLAs, support process, and stability guarantees.
+- [ ] Define **rollback/abort criteria** for each stage (error budget, missed-deadline rate, incident count).
+
+**Step 4 — Day-2 operations (keep it running):**
+- [ ] **Runbooks** for common incidents (broker backlog, worker starvation, DLQ growth, Redis/Postgres failover, AI kill-switch).
+- [ ] **On-call + incident response** process; alerts from Phase 4 wired to paging.
+- [ ] **Backup & restore drills** (Postgres PITR, config/secrets) — tested, not assumed.
+- [ ] **Capacity planning & cost controls**: autoscaling limits, per-tenant quotas, usage dashboards.
+- [ ] **Security operations**: dependency/image scanning in CI, periodic pen-test, secret rotation, vulnerability disclosure process.
+
+**Step 5 — Onboarding, docs & support (so users can actually adopt it):**
+- [ ] **Quickstart** ("submit your first job in 5 minutes"), API reference (auto-generated from FastAPI OpenAPI), SDK/CLI guides, and example workflows/DAGs.
+- [ ] **Self-host install guide** (Helm values, sizing guide, prerequisites) and an upgrade guide.
+- [ ] **Public status page** + uptime monitoring (for SaaS).
+- [ ] **Support channels** (issue tracker, docs site, optional SLA tiers) and a feedback loop into the backlog.
+
+**Exit criteria:** a new user can sign up or self-host, follow docs to run a real workload, and you can operate, upgrade, and support it in production without downtime or data loss.
+
 ---
 
 ## 5. Target data model (Postgres)
@@ -281,6 +323,11 @@ Redis keeps only ephemeral/hot data: stream queues, worker heartbeats/leases, an
 - [ ] AI policy is versioned, eval-gated, rolled out safely, with a kill switch + heuristic fallback.
 - [ ] CI/CD with tests + scans; Helm/K8s deploy with rollback; HA datastores with backups.
 - [ ] Load and chaos tests pass against documented NFRs.
+- [ ] A delivery model is chosen (SaaS / self-hosted / single-tenant) and versioned, published artifacts (images, Helm chart, SDK, CLI) ship through release channels.
+- [ ] Tested upgrade **and** rollback path (incl. DB migrations) with no downtime or data loss.
+- [ ] Phased go-live completed (dogfood → pilot → beta → GA) with defined abort/rollback criteria.
+- [ ] Day-2 ops in place: runbooks, on-call/incident response, tested backup/restore, capacity & cost controls.
+- [ ] Onboarding docs, API reference, quickstart, install/upgrade guides, status page, and support channel are live.
 
 ---
 
