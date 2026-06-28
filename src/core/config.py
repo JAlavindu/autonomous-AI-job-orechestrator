@@ -12,12 +12,17 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
 
-    # RL Config (Placeholders for now)
-    RL_MODEL_PATH: str = "rl_engine/checkpoints/model.pth"
+    # RL Config
+    RL_MODEL_PATH: str = "ai_brain.pth"
 
+    # Executor policy (B3): comma-separated payload "type" values allowed to run.
     EXECUTOR_ALLOWLIST: str = "sleep"
 
+    # Scheduler policy (B4): "heuristic" (default) or "ai".
     SCHEDULER_MODE: str = "heuristic"
+
+    # Logging
+    LOG_LEVEL: str = "INFO"
 
     @property
     def executor_allowlist(self) -> set[str]:
