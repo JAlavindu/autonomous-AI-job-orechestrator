@@ -1,5 +1,11 @@
+x-common-env: &common-env
+  REDIS_HOST: redis
+  SCHEDULER_MODE: heuristic
+  EXECUTOR_ALLOWLIST: sleep
+  LOG_LEVEL: INFO
+  RL_MODEL_PATH: ai_brain.pth
+
 services:
-  # 1. Database
   redis:
     image: redis:7-alpine
     ports:
@@ -7,32 +13,30 @@ services:
     volumes:
       - redis_data:/data
 
-  # 2. Main API & Scheduler (The Brain)
+  # --- Dev (default): bind-mount source for hot reload ---
   api:
     build: .
-    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - .:/app  # Hot-reload code changes
+      - .:/app
     ports:
       - "8000:8000"
     environment:
-      - REDIS_HOST=redis
+      <<: *common-env
     depends_on:
       - redis
 
-  # 3. Worker (The Muscle) - Can be scaled!
   worker:
     build: .
     command: python src/orchestrator/worker.py
     volumes:
       - .:/app
     environment:
-      - REDIS_HOST=redis
+      <<: *common-env
     depends_on:
       - redis
       - api
 
-  # 4. Dashboard (The Eyes)
   dashboard:
     build: .
     command: streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
@@ -41,9 +45,45 @@ services:
     ports:
       - "8501:8501"
     environment:
-      - REDIS_HOST=redis
+      <<: *common-env
     depends_on:
       - redis
+
+  # --- Prod profile: immutable image, no bind mounts ---
+  api-prod:
+    build: .
+    command: uvicorn src.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *common-env
+    depends_on:
+      - redis
+    profiles:
+      - prod
+
+  worker-prod:
+    build: .
+    command: python src/orchestrator/worker.py
+    environment:
+      <<: *common-env
+    depends_on:
+      - redis
+      - api-prod
+    profiles:
+      - prod
+
+  dashboard-prod:
+    build: .
+    command: streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      <<: *common-env
+    depends_on:
+      - redis
+    profiles:
+      - prod
 
 volumes:
   redis_data:

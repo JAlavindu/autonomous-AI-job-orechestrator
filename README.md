@@ -131,7 +131,7 @@ The system uses Reinforcement Learning (RL) to make decisions.
    * **−10.0**: Job failed (executor error, timeout, etc.).
 
 4.  **Learning**:
-    The agent updates its brain (`ai_brain.pth`) using Backpropagation to minimize the Mean Squared Error (MSE) via the Bellman Equation.
+    Weights are trained offline via `train_model.py` and loaded at scheduler startup (`RL_MODEL_PATH`). The serving scheduler does not mutate the model in production.
 
 ---
 
