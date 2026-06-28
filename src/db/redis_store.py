@@ -1,8 +1,13 @@
+from typing import List, Optional
+
 import redis
-import json
-from typing import Optional, List
+
 from src.core.config import settings
+from src.core.logging_config import get_logger
 from src.models.job import Job
+
+logger = get_logger(__name__)
+
 
 class RedisClient:
     def __init__(self):
@@ -10,31 +15,22 @@ class RedisClient:
             host=settings.REDIS_HOST,
             port=settings.REDIS_PORT,
             db=settings.REDIS_DB,
-            decode_responses=True  # Ensures we get strings back instead of bytes
+            decode_responses=True,
         )
 
     def save_job(self, job: Job) -> bool:
-        """
-        Saves a Job object to Redis as a JSON string.
-        Also adds the job ID to a set for easy retrieval of 'all jobs'.
-        """
         try:
             key = f"job:{job.id}"
-            
-            # Use a pipeline to ensure atomicity (both operations happen or neither)
             pipe = self.client.pipeline()
             pipe.set(key, job.model_dump_json())
             pipe.sadd("jobs:index", job.id)
             pipe.execute()
-            
             return True
         except Exception as e:
-            # In production, recommend using the logger defined in utils
-            print(f"Redis Error saving job: {e}")
+            logger.error("Redis error saving job %s: %s", job.id, e)
             return False
-        
+
     def get_job(self, job_id: str) -> Optional[Job]:
-        """Retrieves a Job object by ID."""
         try:
             key = f"job:{job_id}"
             data = self.client.get(key)
@@ -42,34 +38,28 @@ class RedisClient:
                 return Job.model_validate_json(data)
             return None
         except Exception as e:
-            print(f"Redis Error retrieving job: {e}")
+            logger.error("Redis error retrieving job %s: %s", job_id, e)
             return None
 
     def get_all_jobs(self) -> List[Job]:
-        """Retrieves all jobs currently tracked in the system."""
         try:
-            # Get all IDs from the index set
             job_ids = self.client.smembers("jobs:index")
             if not job_ids:
                 return []
-            
-            # Construct the specific keys for these IDs
+
             keys = [f"job:{jid}" for jid in job_ids]
-            
-            # Use mget (multi-get) to fetch all data in one request for performance
             json_data_list = self.client.mget(keys)
-            
+
             jobs = []
             for data in json_data_list:
                 if data:
                     jobs.append(Job.model_validate_json(data))
             return jobs
         except Exception as e:
-            print(f"Redis Error listing jobs: {e}")
+            logger.error("Redis error listing jobs: %s", e)
             return []
 
     def delete_job(self, job_id: str) -> bool:
-        """Deletes a job and removes it from the index."""
         try:
             key = f"job:{job_id}"
             pipe = self.client.pipeline()
@@ -78,21 +68,17 @@ class RedisClient:
             pipe.execute()
             return True
         except Exception as e:
-            print(f"Redis Error deleting job: {e}")
+            logger.error("Redis error deleting job %s: %s", job_id, e)
             return False
-            
+
     def add_to_queue(self, job_id: str):
-        """Pushes job ID to the processing queue."""
         self.client.rpush("queue:jobs", job_id)
 
     def pop_from_queue(self) -> Optional[str]:
-        """
-        Blocking pop from the queue. Waits until a job is available.
-        Returns job_id.
-        """
-        # blpop returns a tuple (key, element), we want the element
         result = self.client.blpop("queue:jobs", timeout=5)
         if result:
             return result[1]
         return None
+
+
 redis_client = RedisClient()

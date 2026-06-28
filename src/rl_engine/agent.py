@@ -1,116 +1,92 @@
-import torch
+import logging
 import os
-import torch.optim as optim
 import random
+
 import numpy as np
+import torch
+import torch.optim as optim
+
 from src.rl_engine.model import DQN
+
+logger = logging.getLogger(__name__)
+
 
 class RLAgent:
     def __init__(self, state_dim, action_dim, lr=1e-3, gamma=0.99, epsilon=1.0):
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.gamma = gamma  # Discount factor
-        self.epsilon = epsilon  # Exploration rate
+        self.gamma = gamma
+        self.epsilon = epsilon
         self.epsilon_min = 0.01
         self.epsilon_decay = 0.995
 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        
-        # Initialize Policy Network
+
         self.policy_net = DQN(state_dim, action_dim).to(self.device)
         self.optimizer = optim.Adam(self.policy_net.parameters(), lr=lr)
         self.loss_fn = torch.nn.MSELoss()
 
     def select_action(self, state, valid_actions_count=None):
-        """
-        Selects an action using Epsilon-Greedy strategy with Action Masking.
-        valid_actions_count: The number of actual runnable jobs available (e.g., 3).
-                             The agent should only pick indices 0, 1, or 2.
-        """
-        # Explore: pick random action from VALID range only
         if random.random() < self.epsilon:
             if valid_actions_count:
                 return random.randint(0, valid_actions_count - 1)
             return random.randint(0, self.action_dim - 1)
-        
-        # Exploit: pick best action from Neural Net
+
         with torch.no_grad():
             state_tensor = torch.FloatTensor(state).unsqueeze(0).to(self.device)
             q_values = self.policy_net(state_tensor)
-            
-            # Action Masking for Exploit phase
+
             if valid_actions_count is not None:
-                # Set Q-values of invalid actions to negative infinity so they are never picked
-                # We create a mask where valid indices are 0 and invalid are -inf
-                mask = torch.full_like(q_values, float('-inf'))
+                mask = torch.full_like(q_values, float("-inf"))
                 mask[0, :valid_actions_count] = 0
                 q_values = q_values + mask
-            
+
             return q_values.argmax().item()
 
     def train_step(self, state, action, reward, next_state, done):
-        """
-        Performs a single update step on the Neural Network.
-        """
         state = torch.FloatTensor(state).to(self.device)
         next_state = torch.FloatTensor(next_state).to(self.device)
-        
-        # FIX: Ensure action is a LongTensor with correct shape for gather
-        action = torch.LongTensor([action]).to(self.device) 
-        
+        action = torch.LongTensor([action]).to(self.device)
         reward = torch.FloatTensor([reward]).to(self.device)
         done = torch.FloatTensor([done]).to(self.device)
 
-        # 1. Get current Q value
-        # q_values usually comes out as shape [action_dim] (e.g. [5])
-        # We need to unsqueeze it to look like a batch of 1: [1, 5] if we want to use gather nicely, 
-        # OR we just index it directly since we aren't using batches.
-        
         q_values = self.policy_net(state)
-        
-        # Verify action is within bounds (debugging safeguard)
+
         if action.item() >= q_values.shape[0]:
-            print(f"[ERROR] Agent attempted to train on invalid action index {action.item()} (Max: {q_values.shape[0]-1})")
-            return 
+            logger.error(
+                "Agent attempted to train on invalid action index %s (max: %s)",
+                action.item(),
+                q_values.shape[0] - 1,
+            )
+            return
 
-        # Direct indexing handles the scaler case safely
-        q_value = q_values[action] 
-
-         # 2. Get max next Q value
+        q_value = q_values[action]
         next_q_values = self.policy_net(next_state)
         next_q_value = next_q_values.max(0)[0].detach()
-        
-        # 3. Calculate Target Q (Bellman Equation)
         expected_q_value = reward + (self.gamma * next_q_value * (1 - done))
 
-        # 4. Compute Loss & Backpropagate
         loss = self.loss_fn(q_value, expected_q_value)
-        
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
 
-         # Decay epsilon
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
     def save_model(self, path: str = "model_checkpoint.pth"):
-        """Saves the Neural Network weights to a file."""
         try:
             torch.save(self.policy_net.state_dict(), path)
-            print(f"[*] AI Model saved to {path}")
+            logger.info("AI model saved to %s", path)
         except Exception as e:
-            print(f"[!] Error saving model: {e}")
+            logger.error("Error saving model to %s: %s", path, e)
 
     def load_model(self, path: str = "model_checkpoint.pth"):
-        """Loads Neural Network weights from a file if it exists."""
         if os.path.exists(path):
             try:
                 self.policy_net.load_state_dict(torch.load(path))
-                self.policy_net.eval() # Set to eval mode appropriately
-                print(f"[*] AI Model loaded from {path}")
+                self.policy_net.eval()
+                logger.info("AI model loaded from %s", path)
             except Exception as e:
-                print(f"[!] Error loading model: {e}")
+                logger.error("Error loading model from %s: %s", path, e)
         else:
-            print(f"[*] No checkpoint found at {path}, starting with fresh model.")
-        
+            logger.info("No checkpoint found at %s; starting with fresh model", path)
