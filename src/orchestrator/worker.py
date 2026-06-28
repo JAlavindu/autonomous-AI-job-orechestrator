@@ -42,17 +42,6 @@ def run_worker(worker_id: str):
                 if result.stderr:
                     print(f" stderr: {result.stderr[:500]}...")
                 
-                    
-            
-            # 4. Simulate Work (Sleep)
-            # In real life, this is where Docker/K8s logic goes
-            duration = job.estimated_duration
-            match_work = duration if duration > 0 else 1
-            time.sleep(match_work)
-            
-            # 5. Update Status to COMPLETED
-            job_manager.update_job_status(job_id, JobStatus.COMPLETED)
-            print(f"[{worker_id}] Finished Job: {job.name}")
 
         except Exception as e:
             print(f"[!] Worker Error: {e}")
