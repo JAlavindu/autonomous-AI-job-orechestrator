@@ -17,6 +17,8 @@ class Settings(BaseSettings):
 
     EXECUTOR_ALLOWLIST: str = "sleep"
 
+    SCHEDULER_MODE: str = "heuristic"
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

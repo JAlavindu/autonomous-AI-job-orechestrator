@@ -1,120 +1,80 @@
 import asyncio
 import traceback
-import numpy as np
 from typing import List
-from src.models.job import Job, JobStatus
-from src.orchestrator.job_manager import job_manager
 from datetime import datetime
 
-# AI Imports
+from src.core.config import settings
+from src.models.job import Job, JobStatus
+from src.orchestrator.job_manager import job_manager
 from src.rl_engine.agent import RLAgent
-from src.rl_engine.environment import encode_state, calculate_reward, INPUT_DIM, MAX_JOBS_INPUT
+from src.rl_engine.environment import encode_state, INPUT_DIM, MAX_JOBS_INPUT
+
+
+def select_by_edf(runnable_jobs: List[Job]) -> int:
+    """Earliest-Deadline-First with priority tie-break. Returns the index to run."""
+    def sort_key(i: int):
+        job = runnable_jobs[i]
+        deadline = job.deadline.timestamp() if job.deadline else float("inf")
+        return (deadline, -job.priority)
+
+    return min(range(len(runnable_jobs)), key=sort_key)
+
 
 class Scheduler:
     def __init__(self, check_interval: float = 2.0):
         self.check_interval = check_interval
         self.is_running = False
+        self.mode = settings.SCHEDULER_MODE
+        self.agent = RLAgent(state_dim=INPUT_DIM, action_dim=MAX_JOBS_INPUT, epsilon=0.0)
+        self.agent.load_model("ai_brain.pth")  # already sets eval() mode
 
-        # Initialize the AI Agent
-        self.agent = RLAgent(state_dim=INPUT_DIM, action_dim=MAX_JOBS_INPUT)
-
-        # [NEW] Load previous training if available
-        self.agent.load_model("ai_brain.pth")
-
-        # [NEW] Buffer to track jobs currently with workers
-        # Map: job_id -> (state, action_index)
-        self.pending_feedback = {}
-
-        print(f"[*] AI Agent Initialized on {self.agent.device}")
+        print(f"[*] AI Agent Initialized on {self.agent.device} (mode={self.mode})")
 
     async def run(self):
-        """
-        Main loop of the scheduler with AI decision making.
-        """
-        JOB_TIMEOUT_SECONDS = 30.0 
+        """Main loop of the scheduler with heuristic or AI decision making."""
+        JOB_TIMEOUT_SECONDS = 30.0
         self.is_running = True
-        print("[*] Scheduler started (Distributed Mode). Waiting for jobs...")
+        print(f"[*] Scheduler started (Distributed Mode, mode={self.mode}). Waiting for jobs...")
 
         while self.is_running:
             try:
-                # 1. Get all jobs that are PENDING
                 all_jobs = job_manager.list_jobs()
                 pending_jobs = [j for j in all_jobs if j.status == JobStatus.PENDING]
-                
-                # Filter strictly for dependencies
                 runnable_jobs = [j for j in pending_jobs if job_manager.are_dependencies_met(j)]
 
                 running_jobs = [j for j in all_jobs if j.status == JobStatus.RUNNING]
                 now = datetime.utcnow()
-                
+
                 for job in running_jobs:
-                    # Ignore jobs that are just "queued" (haven't been picked up by worker yet)
-                    # or check specifically for jobs that have a started_at time
                     if job.started_at:
                         runtime = (now - job.started_at).total_seconds()
-                        
-                        # Use a generous buffer or the job's own estimate * factor
-                        # For this demo, we use a hard limit
                         if runtime > JOB_TIMEOUT_SECONDS:
                             print(f"[!] Job {job.name} ({job.id}) timed out after {runtime:.2f}s. Marking FAILED.")
-                            
-                            # Mark as FAILED
                             job_manager.update_job_status(job.id, JobStatus.FAILED)
 
                 if runnable_jobs:
-                    # AI Decision
-                    current_state = encode_state(runnable_jobs)
-                    valid_count = min(len(runnable_jobs), MAX_JOBS_INPUT)
-                    
-                    action_index = self.agent.select_action(current_state, valid_actions_count=valid_count)
-
-                    if action_index < len(runnable_jobs):
-                        selected_job = runnable_jobs[action_index]
-                        print(f"[>] Scheduler Enqueueing Job: {selected_job.name}")
-                        
-                        # 1. Store state for later training
-                        self.pending_feedback[selected_job.id] = (current_state, action_index)
-                        
-                        # 2. Set status to RUNNING immediately so we don't pick it again
-                        job_manager.update_job_status(selected_job.id, JobStatus.RUNNING, worker_id="queued")
-                        
-                        # 3. Push to Redis Queue using job_manager's internal db reference
-                        # (job_manager.db is the redis_client instance)
-                        job_manager.db.add_to_queue(selected_job.id)
+                    if self.mode == "ai":
+                        try:
+                            current_state = encode_state(runnable_jobs)
+                            valid_count = min(len(runnable_jobs), MAX_JOBS_INPUT)
+                            action_index = self.agent.select_action(
+                                current_state, valid_actions_count=valid_count
+                            )
+                            if action_index >= len(runnable_jobs):
+                                action_index = select_by_edf(runnable_jobs)
+                        except Exception as e:
+                            print(f"[!] AI decision failed, falling back to heuristic: {e}")
+                            action_index = select_by_edf(runnable_jobs)
                     else:
-                        # Fallback for invalid index
-                        job = runnable_jobs[0]
-                        job_manager.update_job_status(job.id, JobStatus.RUNNING, worker_id="queued")
-                        job_manager.db.add_to_queue(job.id)
+                        action_index = select_by_edf(runnable_jobs)
 
-                completed_ids = []
-                # We need to use list() here because we might delete keys during iteration in some edge cases
-                # though strictly safe here since we delete in a separate loop, it's good practice.
-                for jid, (state, action) in list(self.pending_feedback.items()):
-                    job = job_manager.get_job(jid)
-                    
-                    # Check if job is finished
-                    if job and job.status in [JobStatus.COMPLETED, JobStatus.FAILED]:
-                        if job.status == JobStatus.COMPLETED:
-                            reward = calculate_reward(job)
-                            print(f"[$] Job Completed: {job.name}. Reward: {reward}")
-                        else:
-                            reward = -5.0 # Penalty for failure
-                            print(f"[!] Job Failed: {job.name}. Penalty: {reward}")
-
-                        # Estimate next state
-                        latest_jobs = [j for j in job_manager.list_jobs() if j.status == JobStatus.PENDING]
-                        next_state = encode_state(latest_jobs)
-                        
-                        self.agent.train_step(state, action, reward, next_state, done=False)
-                        completed_ids.append(jid)
-
-                # Cleanup buffer
-                for jid in completed_ids:
-                    del self.pending_feedback[jid]
+                    selected_job = runnable_jobs[action_index]
+                    print(f"[>] Scheduler Enqueueing Job: {selected_job.name} (mode={self.mode})")
+                    job_manager.update_job_status(selected_job.id, JobStatus.RUNNING, worker_id="queued")
+                    job_manager.db.add_to_queue(selected_job.id)
 
                 await asyncio.sleep(self.check_interval)
-                
+
             except Exception as e:
                 print(f"[!] Scheduler loop error: {e}")
                 traceback.print_exc()
@@ -123,11 +83,6 @@ class Scheduler:
     def stop(self):
         self.is_running = False
         print("[*] Scheduler stopping...")
-        self.agent.save_model("ai_brain.pth")
 
 
 scheduler = Scheduler()
-
-
-
-
