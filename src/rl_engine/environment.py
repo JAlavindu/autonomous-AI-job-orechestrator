@@ -1,12 +1,17 @@
 import numpy as np
 from typing import List
-from src.models.job import Job
 from datetime import datetime, timezone
+from src.models.job import Job, JobStatus
 
 # Configuration
-MAX_JOBS_INPUT = 15  # The AI looks at the top 5 jobs max at a time
-FEATURES_PER_JOB = 3 # Priority, Duration, Slack Time
+MAX_JOBS_INPUT = 15
+FEATURES_PER_JOB = 3
 INPUT_DIM = MAX_JOBS_INPUT * FEATURES_PER_JOB
+BASE_COMPLETION_REWARD = 1.0
+PRIORITY_WEIGHT = 0.5
+DEADLINE_BONUS = 10.0
+DEADLINE_MISS_PENALTY = 10.0
+FAILURE_PENALTY = -10.0 
 
 def get_job_features(job: Job, current_time=None) -> List[float]:
     """ ... """
@@ -47,20 +52,14 @@ def  encode_state(pending_jobs: List[Job], current_time=None) -> np.array:
     return np.array(feature_list, dtype=np.float32)
 
 def calculate_reward(job: Job) -> float:
-    """
-    Determines the reward after a job finishes.
-    """
-    # Base reward for finishing
-    reward = 1.0
-    
-    # Bonus for Priority
-    reward += job.priority * 0.5
-    
-    # Check Deadline
+    if job.status == JobStatus.FAILED:
+        return FAILURE_PENALTY
+    reward = BASE_COMPLETION_REWARD
+    reward += job.priority * PRIORITY_WEIGHT
     if job.deadline and job.completed_at:
         if job.completed_at <= job.deadline:
-            reward += 10.0 # Big bonus for meeting deadline
+            reward += DEADLINE_BONUS
         else:
-            reward -= 10.0 # Penalty for missing it
+            reward -= DEADLINE_MISS_PENALTY
             
     return reward

@@ -123,10 +123,12 @@ The system uses Reinforcement Learning (RL) to make decisions.
     The **DQN Agent** predicts which index (0-14) has the highest "Q-Value" (Expected future reward).
 
 3.  **Feedback (Reward)**:
-    After a job finishes, the environment calculates a reward score:
-    *   **+10.0**: Finished before deadline.
-    *   **+ (Priority * 0.5)**: High priority bonus.
-    *   **-5.0**: Missed deadline or Failed.
+     After a job finishes, `calculate_reward()` in `src/rl_engine/environment.py` computes:
+   * **+1.0**: Base reward for completing a job.
+   * **+ (Priority × 0.5)**: High-priority bonus.
+   * **+10.0**: Finished on or before deadline.
+   * **−10.0**: Missed deadline.
+   * **−10.0**: Job failed (executor error, timeout, etc.).
 
 4.  **Learning**:
     The agent updates its brain (`ai_brain.pth`) using Backpropagation to minimize the Mean Squared Error (MSE) via the Bellman Equation.
