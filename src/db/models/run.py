@@ -1,3 +1,15 @@
+from datetime import datetime
+
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.types import JSON
+
+from src.db.base import Base
+
+JSONType = JSON().with_variant(JSONB, "postgresql")
+
+
 class RunRow(Base):
     __tablename__ = "runs"
 
@@ -13,6 +25,8 @@ class RunRow(Base):
     stdout: Mapped[str | None] = mapped_column(Text)   # Phase 1 later: cap size / object storage ref
     stderr: Mapped[str | None] = mapped_column(Text)
     log_ref: Mapped[str | None] = mapped_column(String(512))
-    metrics: Mapped[dict | None] = mapped_column(JSONB)
+    metrics: Mapped[dict | None] = mapped_column(JSONType)
 
-    __table_args__ = (UniqueConstraint("job_id", "attempt"),)
+    job = relationship("JobRow", back_populates="runs")
+
+    __table_args__ = (UniqueConstraint("job_id", "attempt", name="uq_runs_job_attempt"),)

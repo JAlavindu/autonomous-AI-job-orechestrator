@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     # Logging
     LOG_LEVEL: str = "INFO"
 
+    DATABASE_URL: str = "postgresql+psycopg2://orchestrator:orchestrator@localhost:5432/orchestrator"
+    DEFAULT_TENANT_ID: str = "00000000-0000-0000-0000-000000000001"
+    DEFAULT_TENANT_NAME: str = "default"
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

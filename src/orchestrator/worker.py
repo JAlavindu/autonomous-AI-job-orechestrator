@@ -28,10 +28,13 @@ def run_worker(worker_id: str):
 
             logger.info("[%s] Processing job: %s", worker_id, job.name)
             job_manager.update_job_status(job_id, JobStatus.RUNNING, worker_id=worker_id)
+            run = job_manager.start_run(job_id, worker_id) if hasattr(job_manager, "start_run") else None
 
             result = execute_job(job)
 
             if result.success:
+                if run and hasattr(job_manager, "finish_run"):
+                    job_manager.finish_run(run.id, JobStatus.COMPLETED, result)
                 job_manager.update_job_status(job_id, JobStatus.COMPLETED)
                 logger.info(
                     "[%s] Finished job %s (%.2fs)",
@@ -42,6 +45,8 @@ def run_worker(worker_id: str):
                 if result.stdout:
                     logger.debug("[%s] stdout: %s", worker_id, result.stdout[:500])
             else:
+                if run and hasattr(job_manager, "finish_run"):
+                    job_manager.finish_run(run.id, JobStatus.FAILED, result)
                 job_manager.update_job_status(job_id, JobStatus.FAILED)
                 logger.warning(
                     "[%s] Failed job %s (%.2fs)",
