@@ -18,7 +18,7 @@ class AuditLogRow(Base):
     actor: Mapped[str] = mapped_column(String(255), nullable=False, default="system")
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target: Mapped[str] = mapped_column(String(255), nullable=False)
-    payload: Mapped[dict | None] = mapped_column(JSONType)
+    payload: Mapped[dict] = mapped_column(JSONType, nullable=True)
     ts: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -1,5 +1,8 @@
 x-common-env: &common-env
   REDIS_HOST: redis
+  DATABASE_URL: postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator
+  DEFAULT_TENANT_ID: 00000000-0000-0000-0000-000000000001
+  DEFAULT_TENANT_NAME: default
   SCHEDULER_MODE: heuristic
   EXECUTOR_ALLOWLIST: sleep
   LOG_LEVEL: INFO
@@ -13,6 +16,17 @@ services:
     volumes:
       - redis_data:/data
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: orchestrator
+      POSTGRES_PASSWORD: orchestrator
+      POSTGRES_DB: orchestrator
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
   # --- Dev (default): bind-mount source for hot reload ---
   api:
     build: .
@@ -25,6 +39,7 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
 
   worker:
     build: .
@@ -35,6 +50,7 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
       - api
 
   dashboard:
@@ -48,6 +64,7 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
 
   # --- Prod profile: immutable image, no bind mounts ---
   api-prod:
@@ -59,6 +76,7 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
     profiles:
       - prod
 
@@ -69,6 +87,7 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
       - api-prod
     profiles:
       - prod
@@ -82,19 +101,10 @@ services:
       <<: *common-env
     depends_on:
       - redis
+      - postgres
     profiles:
       - prod
 
-  postgres:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_USER: orchestrator
-      POSTGRES_PASSWORD: orchestrator
-      POSTGRES_DB: orchestrator
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
 volumes:
   redis_data:
+  postgres_data:
