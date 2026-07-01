@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     DEFAULT_TENANT_ID: str = "00000000-0000-0000-0000-000000000001"
     DEFAULT_TENANT_NAME: str = "default"
 
+    JOB_STREAM_KEY: str = "stream:jobs"
+    JOB_STREAM_GROUP: str = "workers"
+    JOB_STREAM_BLOCK_MS: int = 5000
+    JOB_STREAM_MAXLEN: int = 10000
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

@@ -10,6 +10,7 @@ from src.db.models import AuditLogRow, DependencyRow, JobRow, RunRow, TenantRow
 from src.db.session import SessionLocal
 from src.models.job import Job, JobCreate, JobStatus
 from src.db.redis_store import redis_client
+from src.db.stream_queue import job_stream
 from src.orchestrator.executors.base import ExecutionResult
 
 class JobManager:
@@ -240,5 +241,9 @@ class JobManager:
                 return False
         
         return True
+    
+    def enqueue_job(self, job_id: str) -> str:
+        """Push a durable job id onto the Redis Stream work queue."""
+        return job_stream.enqueue(job_id)
 
 job_manager = JobManager()
