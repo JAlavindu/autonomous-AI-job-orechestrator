@@ -122,20 +122,18 @@ def upgrade() -> None:
     op.create_index("ix_runs_job_id", "runs", ["job_id"])
 
     op.execute(
-        sa.text(
-            "INSERT INTO tenants (id, name, created_at) "
-            "VALUES (:id, :name, NOW()) "
-            "ON CONFLICT (id) DO NOTHING"
-        ),
-        {"id": DEFAULT_TENANT_ID, "name": DEFAULT_TENANT_NAME},
-    )
+    sa.text(
+        "INSERT INTO tenants (id, name, created_at) "
+        "VALUES (:id, :name, NOW()) "
+        "ON CONFLICT (id) DO NOTHING"
+    ).bindparams(id=DEFAULT_TENANT_ID, name=DEFAULT_TENANT_NAME)
+)
 
 
 def downgrade() -> None:
     op.execute(
-        sa.text("DELETE FROM tenants WHERE id = :id"),
-        {"id": DEFAULT_TENANT_ID},
-    )
+    sa.text("DELETE FROM tenants WHERE id = :id").bindparams(id=DEFAULT_TENANT_ID)
+)
     op.drop_index("ix_runs_job_id", table_name="runs")
     op.drop_table("runs")
     op.drop_table("dependencies")
