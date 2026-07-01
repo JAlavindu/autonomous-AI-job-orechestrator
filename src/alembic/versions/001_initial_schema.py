@@ -1,4 +1,4 @@
-"""initial phase 1a schema
+"""initial phase 1 schema
 
 Revision ID: 001_initial_schema
 Revises:
@@ -15,6 +15,9 @@ revision: str = "001_initial_schema"
 down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
+
+DEFAULT_TENANT_ID = "00000000-0000-0000-0000-000000000001"
+DEFAULT_TENANT_NAME = "default"
 
 JSONType = sa.JSON().with_variant(postgresql.JSONB(astext_type=sa.Text()), "postgresql")
 
@@ -38,7 +41,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
         sa.Column("cron", sa.String(length=255), nullable=False),
         sa.Column("next_run_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("enabled", sa.Boolean(), nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -51,15 +54,15 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("priority", sa.Integer(), nullable=False),
+        sa.Column("priority", sa.Integer(), nullable=False, server_default="1"),
         sa.Column("deadline", sa.DateTime(timezone=True), nullable=True),
         sa.Column("est_duration", sa.Float(), nullable=False),
-        sa.Column("status", sa.String(length=32), nullable=False),
+        sa.Column("status", sa.String(length=32), nullable=False, server_default="PENDING"),
         sa.Column("schedule_id", sa.String(length=36), nullable=True),
         sa.Column("idempotency_key", sa.String(length=255), nullable=True),
-        sa.Column("payload", JSONType, nullable=False),
+        sa.Column("payload", JSONType, nullable=False, server_default=sa.text("'{}'::jsonb")),
         sa.Column("resource_req", JSONType, nullable=True),
-        sa.Column("retry_count", sa.Integer(), nullable=False),
+        sa.Column("retry_count", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("worker_id", sa.String(length=128), nullable=True),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
@@ -77,7 +80,7 @@ def upgrade() -> None:
         "audit_log",
         sa.Column("id", sa.String(length=36), nullable=False),
         sa.Column("tenant_id", sa.String(length=36), nullable=False),
-        sa.Column("actor", sa.String(length=255), nullable=False),
+        sa.Column("actor", sa.String(length=255), nullable=False, server_default="system"),
         sa.Column("action", sa.String(length=128), nullable=False),
         sa.Column("target", sa.String(length=255), nullable=False),
         sa.Column("payload", JSONType, nullable=True),
@@ -118,8 +121,21 @@ def upgrade() -> None:
     )
     op.create_index("ix_runs_job_id", "runs", ["job_id"])
 
+    op.execute(
+        sa.text(
+            "INSERT INTO tenants (id, name, created_at) "
+            "VALUES (:id, :name, NOW()) "
+            "ON CONFLICT (id) DO NOTHING"
+        ),
+        {"id": DEFAULT_TENANT_ID, "name": DEFAULT_TENANT_NAME},
+    )
+
 
 def downgrade() -> None:
+    op.execute(
+        sa.text("DELETE FROM tenants WHERE id = :id"),
+        {"id": DEFAULT_TENANT_ID},
+    )
     op.drop_index("ix_runs_job_id", table_name="runs")
     op.drop_table("runs")
     op.drop_table("dependencies")

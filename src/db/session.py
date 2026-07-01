@@ -12,15 +12,19 @@ def get_engine():
     return create_engine(settings.DATABASE_URL, pool_pre_ping=True, future=True)
 
 
-def SessionLocal() -> Session:
-    factory = sessionmaker(
+@lru_cache(maxsize=1)
+def get_session_factory():
+    return sessionmaker(
         bind=get_engine(),
         autoflush=False,
         autocommit=False,
         expire_on_commit=False,
         future=True,
     )
-    return factory()
+
+
+def SessionLocal() -> Session:
+    return get_session_factory()()
 
 
 def get_db() -> Generator[Session, None, None]:
