@@ -482,27 +482,27 @@ class JobManager:
 
         return True
 
-    def enqueue_job(self, job_id: str) -> str:
+        def enqueue_job(self, job_id: str) -> str:
         return job_stream.enqueue(job_id)
-    
-        def get_run_logs(self, job_id: str, run_id: str, full: bool = False) -> Optional[dict]:
-            with self.session_factory() as db:
-                row = db.get(RunRow, run_id)
-                if not row or row.job_id != job_id:
-                    return None
 
-                if not full:
-                    return {
-                        "run_id": row.id,
-                        "job_id": row.job_id,
-                        "stdout": row.stdout,
-                        "stderr": row.stderr,
-                        "error": row.error,
-                        "stdout_ref": None,
-                        "stderr_ref": None,
-                        "error_ref": None,
-                        "spilled": bool(row.log_ref),
-                    }
+    def get_run_logs(self, job_id: str, run_id: str, full: bool = False) -> Optional[dict]:
+        with self.session_factory() as db:
+            row = db.get(RunRow, run_id)
+            if not row or row.job_id != job_id:
+                return None
+
+            if not full:
+                return {
+                    "run_id": row.id,
+                    "job_id": row.job_id,
+                    "stdout": row.stdout,
+                    "stderr": row.stderr,
+                    "error": row.error,
+                    "stdout_ref": None,
+                    "stderr_ref": None,
+                    "error_ref": None,
+                    "spilled": bool(row.log_ref),
+                }
 
             merged = load_full_run_logs(row.log_ref, row.stdout, row.stderr, row.error)
             merged["run_id"] = row.id
