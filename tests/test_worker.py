@@ -1,15 +1,22 @@
 import pytest
+from dataclasses import dataclass
 
 from src.models.job import Job, JobStatus
 from src.orchestrator.executors.base import ExecutionResult
 import src.orchestrator.worker as worker
 
 
+@dataclass(frozen=True)
+class FakeMessage:
+    message_id: str
+    job_id: str
+
+
 class FakeJobManager:
-    """Records every status transition so we can assert on the sequence."""
     def __init__(self, job: Job):
         self._job = job
         self.status_calls: list = []
+        self.acked: list[str] = []
 
     def get_job(self, job_id: str):
         return self._job
@@ -19,22 +26,34 @@ class FakeJobManager:
         self._job.status = status
         return self._job
 
+    def start_run(self, job_id: str, worker_id: str):
+        return type("Run", (), {"id": "run-1"})()
 
-def _pop_once_then_stop(job_id: str):
-    """Yield one job id, then raise KeyboardInterrupt to exit the worker loop.
+    def finish_run(self, run_id: str, status, result):
+        return None
 
-    KeyboardInterrupt is a BaseException, so the worker's `except Exception`
-    does not catch it and the loop terminates cleanly for the test.
-    """
+
+def _read_once_then_stop(job_id: str):
     calls = {"n": 0}
 
-    def _pop():
+    def _read(consumer_name: str):
         if calls["n"] == 0:
             calls["n"] += 1
-            return job_id
+            return FakeMessage(message_id="1-0", job_id=job_id)
         raise KeyboardInterrupt
 
-    return _pop
+    return _read
+
+
+def _patch_stream(monkeypatch, job_id: str, fake_mgr: FakeJobManager):
+    monkeypatch.setattr(worker.job_stream, "ensure_group", lambda: None)
+    monkeypatch.setattr(worker.job_stream, "read", _read_once_then_stop(job_id))
+    monkeypatch.setattr(
+        worker.job_stream,
+        "ack",
+        lambda message_id: fake_mgr.acked.append(message_id) or 1,
+    )
+    monkeypatch.setattr(worker, "job_manager", fake_mgr)
 
 
 def test_failed_job_is_not_overwritten_as_completed(monkeypatch):
@@ -44,35 +63,34 @@ def test_failed_job_is_not_overwritten_as_completed(monkeypatch):
         payload={"type": "shell", "command": "exit 1"},
     )
     fake_mgr = FakeJobManager(job)
-
-    monkeypatch.setattr(worker, "job_manager", fake_mgr)
-    monkeypatch.setattr(worker.redis_client, "pop_from_queue", _pop_once_then_stop(job.id))
+    _patch_stream(monkeypatch, job.id, fake_mgr)
     monkeypatch.setattr(
-        worker, "execute_job",
+        worker,
+        "execute_job",
         lambda j: ExecutionResult(success=False, exit_code=1, error_message="boom"),
     )
 
     with pytest.raises(KeyboardInterrupt):
         worker.run_worker("test-worker")
 
-    # Final state is FAILED and COMPLETED was never recorded (the B2 regression).
     assert fake_mgr.status_calls[-1] == JobStatus.FAILED
     assert JobStatus.COMPLETED not in fake_mgr.status_calls
+    assert fake_mgr.acked == ["1-0"]
 
 
 def test_worker_does_not_sleep_for_estimated_duration(monkeypatch):
     job = Job(
         name="sleepy-job",
-        estimated_duration=999,  # would hang the test if the old redundant sleep returned
+        estimated_duration=999,
         payload={"type": "shell", "command": "echo hi"},
     )
     fake_mgr = FakeJobManager(job)
     sleep_calls: list = []
 
-    monkeypatch.setattr(worker, "job_manager", fake_mgr)
-    monkeypatch.setattr(worker.redis_client, "pop_from_queue", _pop_once_then_stop(job.id))
+    _patch_stream(monkeypatch, job.id, fake_mgr)
     monkeypatch.setattr(
-        worker, "execute_job",
+        worker,
+        "execute_job",
         lambda j: ExecutionResult(success=True, exit_code=0, stdout="hi"),
     )
     monkeypatch.setattr(worker.time, "sleep", lambda s: sleep_calls.append(s))
@@ -81,5 +99,5 @@ def test_worker_does_not_sleep_for_estimated_duration(monkeypatch):
         worker.run_worker("test-worker")
 
     assert fake_mgr.status_calls[-1] == JobStatus.COMPLETED
-    # The redundant time.sleep(estimated_duration) must be gone.
     assert sleep_calls == []
+    assert fake_mgr.acked == ["1-0"]

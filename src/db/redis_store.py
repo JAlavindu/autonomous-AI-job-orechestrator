@@ -71,14 +71,14 @@ class RedisClient:
             logger.error("Redis error deleting job %s: %s", job_id, e)
             return False
 
-    def add_to_queue(self, job_id: str):
-        self.client.rpush("queue:jobs", job_id)
+    # def add_to_queue(self, job_id: str):
+    #     self.client.rpush("queue:jobs", job_id)
 
-    def pop_from_queue(self) -> Optional[str]:
-        result = self.client.blpop("queue:jobs", timeout=5)
-        if result:
-            return result[1]
-        return None
+    # def pop_from_queue(self) -> Optional[str]:
+    #     result = self.client.blpop("queue:jobs", timeout=5)
+    #     if result:
+    #         return result[1]
+    #     return None
 
 
 redis_client = RedisClient()

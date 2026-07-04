@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from src.core.config import settings
 from src.core.logging_config import RequestIdMiddleware, get_logger, setup_logging
 from src.api.routes import router as api_router
+from src.db.stream_queue import job_stream
 
 setup_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
@@ -16,6 +17,7 @@ from src.orchestrator.scheduler import scheduler  # noqa: E402
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    job_stream.ensure_group()
     logger.info("Starting scheduler")
     scheduler_task = asyncio.create_task(scheduler.run())
 

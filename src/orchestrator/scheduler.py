@@ -85,7 +85,7 @@ class Scheduler:
                     selected_job = runnable_jobs[action_index]
                     logger.info("Enqueueing job %s (mode=%s)", selected_job.name, self.mode)
                     job_manager.update_job_status(selected_job.id, JobStatus.RUNNING, worker_id="queued")
-                    job_manager.db.add_to_queue(selected_job.id)
+                    job_manager.enqueue_job(selected_job.id)
 
                 await asyncio.sleep(self.check_interval)
 

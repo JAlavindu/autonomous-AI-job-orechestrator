@@ -1,4 +1,4 @@
-x-common-env: &common-env
+﻿x-common-env: &common-env
   REDIS_HOST: redis
   DATABASE_URL: postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator
   DEFAULT_TENANT_ID: 00000000-0000-0000-0000-000000000001
@@ -7,6 +7,10 @@ x-common-env: &common-env
   EXECUTOR_ALLOWLIST: sleep
   LOG_LEVEL: INFO
   RL_MODEL_PATH: ai_brain.pth
+  JOB_STREAM_KEY: stream:jobs
+  JOB_STREAM_GROUP: workers
+  JOB_STREAM_BLOCK_MS: 5000
+  JOB_STREAM_MAXLEN: 10000
 
 services:
   redis:
