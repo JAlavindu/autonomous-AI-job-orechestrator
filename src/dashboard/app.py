@@ -9,6 +9,8 @@ import streamlit as st
 API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
 JOBS_URL = f"{API_URL}/api/v1/jobs/"
 DLQ_URL = f"{API_URL}/api/v1/dlq"
+API_KEY = os.getenv("ORCHESTRATOR_API_KEY", "")
+HEADERS = {"X-API-Key": API_KEY} if API_KEY else {}
 
 st.set_page_config(page_title="AI Orchestrator Monitor", layout="wide")
 st.title("Autonomous AI Job Orchestrator Dashboard")
@@ -39,11 +41,11 @@ if st.button("Refresh Data"):
     st.rerun()
 
 try:
-    jobs_resp = requests.get(JOBS_URL, params={"limit": 1000}, timeout=5)
+    jobs_resp = requests.get(JOBS_URL, params={"limit": 1000}, headers=HEADERS, timeout=5)
     jobs_resp.raise_for_status()
     jobs = jobs_resp.json().get("items", [])
 
-    dlq_resp = requests.get(DLQ_URL, params={"limit": 100}, timeout=5)
+    dlq_resp = requests.get(DLQ_URL, params={"limit": 100}, headers=HEADERS, timeout=5)
     dlq_resp.raise_for_status()
     dlq_items = dlq_resp.json().get("items", [])
 except Exception as exc:

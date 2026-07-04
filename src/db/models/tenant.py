@@ -20,3 +20,4 @@ class TenantRow(Base):
 
     jobs = relationship("JobRow", back_populates="tenant")
     schedules = relationship("ScheduleRow", back_populates="tenant")
+    api_keys = relationship("ApiKeyRow", back_populates="tenant")

@@ -26,6 +26,9 @@
   LOG_SPILL_THRESHOLD_CHARS: 4096
   LOG_INLINE_PREVIEW_CHARS: 2048
   API_URL: http://api:8000
+  AUTH_ENABLED: true
+  API_KEY_PEPPER: change-me-in-production
+  AUTH_BOOTSTRAP_OPERATOR_KEY: ork_dev_operator_replace_me
 
 services:
   redis:
@@ -93,6 +96,7 @@ services:
       - "8501:8501"
     environment:
       <<: *common-env
+      ORCHESTRATOR_API_KEY: ork_dev_operator_replace_me
     depends_on:
       - redis
       - postgres

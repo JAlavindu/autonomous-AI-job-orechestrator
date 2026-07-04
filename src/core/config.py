@@ -43,6 +43,12 @@ class Settings(BaseSettings):
 
     API_URL: str = "http://localhost:8000"
 
+    # --- Phase 2 auth ---
+    AUTH_ENABLED: bool = True
+    API_KEY_PEPPER: str = "change-me-in-production"
+    API_KEY_HEADER: str = "X-API-Key"
+    AUTH_BOOTSTRAP_OPERATOR_KEY: str = ""
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}
