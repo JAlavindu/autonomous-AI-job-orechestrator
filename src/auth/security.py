@@ -15,3 +15,6 @@ def hash_api_key(raw_key: str, pepper: str) -> str:
 
 def key_prefix(raw_key: str) -> str:
     return raw_key[:12]
+
+def looks_like_jwt(token: str) -> bool:
+    return token.count(".") == 2 and not token.startswith("ork_")

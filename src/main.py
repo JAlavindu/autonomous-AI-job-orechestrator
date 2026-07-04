@@ -12,6 +12,7 @@ from src.core.logging_config import RequestIdMiddleware, get_logger, setup_loggi
 from src.db.stream_queue import job_stream
 from src.storage.log_store import log_store
 from src.tenancy.middleware import RequestSizeLimitMiddleware
+from src.core.secrets import hydrate_settings_from_secrets
 
 setup_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
@@ -21,6 +22,8 @@ from src.orchestrator.scheduler import scheduler  # noqa: E402
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    hydrate_settings_from_secrets(settings)
+    settings.validate_secrets_for_environment()
     log_store.root.mkdir(parents=True, exist_ok=True)
     job_stream.ensure_group()
 
@@ -35,6 +38,22 @@ async def lifespan(app: FastAPI):
     logger.info("Stopping scheduler")
     scheduler.stop()
     scheduler_task.cancel()
+
+def validate_secrets_for_environment(self) -> None:
+    if self.ENVIRONMENT != "production":
+        return
+    insecure = []
+    if self.API_KEY_PEPPER == "change-me-in-production":
+        insecure.append("API_KEY_PEPPER")
+    if self.JWT_SECRET_KEY in ("", "dev-only-change-me", "change-me-in-production"):
+        insecure.append("JWT_SECRET_KEY")
+    if self.AUTH_BOOTSTRAP_OPERATOR_KEY.strip():
+        insecure.append("AUTH_BOOTSTRAP_OPERATOR_KEY (must be empty in production)")
+    if insecure:
+        raise RuntimeError(
+            "Refusing to start in production with insecure configuration: "
+            + ", ".join(insecure)
+        )
 
 
 app = FastAPI(

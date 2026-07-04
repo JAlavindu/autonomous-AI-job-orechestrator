@@ -58,6 +58,22 @@ class Settings(BaseSettings):
     RATE_LIMIT_ENABLED: bool = True
     RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    ENVIRONMENT: str = "development"  # development | staging | production
+    SECRETS_BACKEND: str = "env"  # env | vault
+
+    JWT_ENABLED: bool = True
+    JWT_SECRET_KEY: str = "dev-only-change-me"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ISSUER: str = "autonomous-ai-job-orchestrator"
+    JWT_AUDIENCE: str = "orchestrator-api"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+
+    # HashVault KV v2 (optional; only when SECRETS_BACKEND=vault)
+    VAULT_ADDR: str = ""
+    VAULT_TOKEN: str = ""
+    VAULT_MOUNT: str = "secret"
+    VAULT_PATH: str = "orchestrator"
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

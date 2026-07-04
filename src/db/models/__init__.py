@@ -14,4 +14,5 @@ __all__ = [
     "RunRow",
     "ScheduleRow",
     "TenantRow",
+    "ServiceAccountRow",
 ]

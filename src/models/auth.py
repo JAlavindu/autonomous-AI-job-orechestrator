@@ -1,9 +1,10 @@
 from datetime import datetime
 from enum import Enum
-from typing import Optional
+from typing import Optional, Literal
 
 from pydantic import BaseModel, Field
 
+AuthMethod = Literal["api_key", "jwt", "client_credentials"]
 
 class Role(str, Enum):
     VIEWER = "viewer"
@@ -54,3 +55,50 @@ class ApiKeySummary(BaseModel):
 class ApiKeyListResponse(BaseModel):
     items: list[ApiKeySummary]
     total: int
+
+class Principal(BaseModel):
+    subject_id: str  # rename conceptually from api_key_id
+    tenant_id: str
+    role: Role
+    name: str
+    auth_method: AuthMethod = "api_key"
+    @property
+    def api_key_id(self) -> str:
+        """Backward-compatible alias used in existing code."""
+        return self.subject_id
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+class ServiceAccountCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=128)
+    role: Role = Role.PRODUCER
+class ServiceAccountCreatedResponse(BaseModel):
+    id: str
+    name: str
+    role: Role
+    client_id: str
+    client_secret: str  # shown once
+    tenant_id: str
+    created_at: datetime
+class ServiceAccountSummary(BaseModel):
+    id: str
+    name: str
+    role: Role
+    client_id: str
+    tenant_id: str
+    enabled: bool
+    created_at: datetime
+class AuditLogEntry(BaseModel):
+    id: str
+    tenant_id: str
+    actor: str
+    action: str
+    target: str
+    payload: dict
+    ts: datetime
+class AuditLogListResponse(BaseModel):
+    items: list[AuditLogEntry]
+    total: int
+    limit: int
+    offset: int
