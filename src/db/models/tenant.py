@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.base import Base
@@ -14,6 +14,8 @@ class TenantRow(Base):
     quota_cpu: Mapped[int] = mapped_column(Integer, nullable=True)
     quota_mem: Mapped[int] = mapped_column(Integer, nullable=True)
     rate_limit: Mapped[int] = mapped_column(Integer, nullable=True)
+    max_jobs: Mapped[int] = mapped_column(Integer, nullable=True)
+    executor_allowlist: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

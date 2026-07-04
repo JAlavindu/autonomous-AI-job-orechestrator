@@ -29,6 +29,10 @@
   AUTH_ENABLED: true
   API_KEY_PEPPER: change-me-in-production
   AUTH_BOOTSTRAP_OPERATOR_KEY: ork_dev_operator_replace_me
+  MAX_REQUEST_BODY_BYTES: 1048576
+  DEFAULT_TENANT_MAX_JOBS: 1000
+  DEFAULT_TENANT_RATE_LIMIT: 120
+  RATE_LIMIT_ENABLED: "true"
 
 services:
   redis:

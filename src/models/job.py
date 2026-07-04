@@ -3,6 +3,9 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 from datetime import datetime
 import uuid
+import json
+from pydantic import BaseModel, Field, field_validator
+from src.core.config import settings
 
 
 class JobStatus(str, Enum):
@@ -22,6 +25,20 @@ class JobBase(BaseModel):
     estimated_duration: float = Field(..., description="Estimated duration in seconds")
     dependencies: List[str] = Field(default_factory=list, description="List of Job IDs this job depends on")
     payload: Dict[str, Any] = Field(default_factory=dict, description="Arguments for the job execution")
+
+    @field_validator("dependencies")
+    @classmethod
+    def validate_dependency_count(cls, value: list[str]) -> list[str]:
+        if len(value) > settings.MAX_JOB_DEPENDENCIES:
+            raise ValueError(f"At most {settings.MAX_JOB_DEPENDENCIES} dependencies allowed")
+        return value
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload_size(cls, value: dict) -> dict:
+        if len(json.dumps(value, default=str)) > settings.MAX_JOB_PAYLOAD_BYTES:
+            raise ValueError(f"Payload exceeds {settings.MAX_JOB_PAYLOAD_BYTES} bytes")
+        return value
 
 
 class JobCreate(JobBase):
@@ -45,6 +62,7 @@ class Job(JobBase):
     retry_count: int = 0
     worker_id: Optional[str] = None
     idempotency_key: Optional[str] = None
+    tenant_id: Optional[str] = None
 
     class Config:
         use_enum_values = True
@@ -91,6 +109,12 @@ class DagJobCreate(BaseModel):
 
 class DagSubmit(BaseModel):
     jobs: List[DagJobCreate] = Field(..., min_length=1)
+    @field_validator("jobs")
+    @classmethod
+    def validate_dag_size(cls, value: list) -> list:
+        if len(value) > settings.MAX_DAG_JOBS:
+            raise ValueError(f"At most {settings.MAX_DAG_JOBS} jobs per DAG submit")
+        return value
 
 
 class DagSubmitResponse(BaseModel):

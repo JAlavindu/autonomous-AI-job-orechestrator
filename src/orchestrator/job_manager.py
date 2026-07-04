@@ -10,17 +10,17 @@ from src.core.config import settings
 from src.core.output import truncate_output
 from src.db.models import AuditLogRow, DependencyRow, JobRow, RunRow, TenantRow
 from src.db.session import SessionLocal
-from src.db.redis_store import redis_client
 from src.db.stream_queue import job_stream
 from src.models.job import DagJobCreate, Job, JobCreate, JobStatus, Run
 from src.orchestrator.executors.base import ExecutionResult
 from src.storage.run_logs import load_full_run_logs, persist_run_output
+from src.tenancy.exceptions import QuotaExceededError
+from src.tenancy.policy import tenant_policy
 
 
 class JobManager:
     def __init__(self, session_factory=SessionLocal):
         self.session_factory = session_factory
-        self.db = redis_client
 
     def _ensure_default_tenant(self, db: Session) -> TenantRow:
         tenant = db.get(TenantRow, settings.DEFAULT_TENANT_ID)
@@ -38,6 +38,7 @@ class JobManager:
     def _audit(
         self,
         db: Session,
+        tenant_id: str,
         action: str,
         target: str,
         payload: dict | None = None,
@@ -46,7 +47,7 @@ class JobManager:
         db.add(
             AuditLogRow(
                 id=str(uuid.uuid4()),
-                tenant_id=settings.DEFAULT_TENANT_ID,
+                tenant_id=tenant_id,
                 actor=actor,
                 action=action,
                 target=target,

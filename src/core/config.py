@@ -49,6 +49,15 @@ class Settings(BaseSettings):
     API_KEY_HEADER: str = "X-API-Key"
     AUTH_BOOTSTRAP_OPERATOR_KEY: str = ""
 
+    MAX_REQUEST_BODY_BYTES: int = 1_048_576
+    MAX_JOB_PAYLOAD_BYTES: int = 65_536
+    MAX_JOB_DEPENDENCIES: int = 50
+    MAX_DAG_JOBS: int = 100
+    DEFAULT_TENANT_MAX_JOBS: int = 1000
+    DEFAULT_TENANT_RATE_LIMIT: int = 120
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

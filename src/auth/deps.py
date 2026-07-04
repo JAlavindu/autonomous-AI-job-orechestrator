@@ -5,6 +5,8 @@ from fastapi import Depends, HTTPException, Request, status
 from src.auth.service import api_key_service
 from src.core.config import settings
 from src.models.auth import ROLE_RANK, Principal, Role
+from src.tenancy.exceptions import RateLimitExceededError
+from src.tenancy.rate_limit import rate_limiter
 
 
 def _extract_api_key(request: Request) -> str | None:
@@ -43,6 +45,15 @@ def get_current_principal(request: Request) -> Principal:
             detail="Invalid or revoked API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    if settings.RATE_LIMIT_ENABLED:
+        try:
+            rate_limiter.check(principal.tenant_id)
+        except RateLimitExceededError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=str(exc),
+            ) from exc
 
     return principal
 
