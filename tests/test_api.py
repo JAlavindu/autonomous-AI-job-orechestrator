@@ -1,42 +1,5 @@
-import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-
-import src.api.routes as routes
-import src.db.models  # noqa: F401
-from src.db.base import Base
-from src.main import app
-from src.orchestrator.job_manager import JobManager
 from src.models.job import JobStatus
 from src.orchestrator.executors.base import ExecutionResult
-
-
-@pytest.fixture
-def api_client(monkeypatch):
-    engine = create_engine(
-        "sqlite+pysqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-        future=True,
-    )
-    Base.metadata.create_all(engine)
-    TestingSession = sessionmaker(
-        bind=engine,
-        autoflush=False,
-        autocommit=False,
-        expire_on_commit=False,
-        future=True,
-    )
-    manager = JobManager(session_factory=TestingSession)
-    monkeypatch.setattr(routes, "job_manager", manager)
-
-    try:
-        yield TestClient(app)
-    finally:
-        Base.metadata.drop_all(engine)
-        engine.dispose()
 
 
 def test_root(api_client):
@@ -51,7 +14,9 @@ def test_create_job(api_client):
         "priority": 5,
         "estimated_duration": 10,
     }
-    response =  api_client.post("/api/v1/jobs/", json=payload, headers=api_client.operator_headers)
+    response = api_client.post(
+        "/api/v1/jobs/", json=payload, headers=api_client.operator_headers
+    )
     assert response.status_code == 201
     data = response.json()
     assert data["name"] == "Unit Test Job"
@@ -61,25 +26,41 @@ def test_create_job(api_client):
 
 def test_job_persistence(api_client):
     payload = {"name": "Persistent Job", "priority": 10, "estimated_duration": 5}
-    create_res = api_client.post("/api/v1/jobs/", json=payload)
+    create_res = api_client.post(
+        "/api/v1/jobs/", json=payload, headers=api_client.operator_headers
+    )
     job_id = create_res.json()["id"]
 
-    get_res = api_client.get(f"/api/v1/jobs/{job_id}")
+    get_res = api_client.get(
+        f"/api/v1/jobs/{job_id}", headers=api_client.operator_headers
+    )
     assert get_res.status_code == 200
     assert get_res.json()["id"] == job_id
     assert get_res.json()["priority"] == 10
 
 
 def test_get_nonexistent_job(api_client):
-    response = api_client.get("/api/v1/jobs/non-existent-id")
+    response = api_client.get(
+        "/api/v1/jobs/non-existent-id", headers=api_client.operator_headers
+    )
     assert response.status_code == 404
 
 
 def test_list_jobs_paginated(api_client):
-    api_client.post("/api/v1/jobs/", json={"name": "A", "estimated_duration": 1})
-    api_client.post("/api/v1/jobs/", json={"name": "B", "estimated_duration": 1})
+    api_client.post(
+        "/api/v1/jobs/",
+        json={"name": "A", "estimated_duration": 1},
+        headers=api_client.operator_headers,
+    )
+    api_client.post(
+        "/api/v1/jobs/",
+        json={"name": "B", "estimated_duration": 1},
+        headers=api_client.operator_headers,
+    )
 
-    response = api_client.get("/api/v1/jobs/?limit=1&offset=0")
+    response = api_client.get(
+        "/api/v1/jobs/?limit=1&offset=0", headers=api_client.operator_headers
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["total"] == 2
@@ -94,8 +75,12 @@ def test_idempotency_key(api_client):
         "estimated_duration": 1,
         "idempotency_key": "idem-123",
     }
-    first = api_client.post("/api/v1/jobs/", json=payload)
-    second = api_client.post("/api/v1/jobs/", json=payload)
+    first = api_client.post(
+        "/api/v1/jobs/", json=payload, headers=api_client.operator_headers
+    )
+    second = api_client.post(
+        "/api/v1/jobs/", json=payload, headers=api_client.operator_headers
+    )
     assert first.status_code == 201
     assert second.status_code == 201
     assert first.json()["id"] == second.json()["id"]
@@ -108,7 +93,9 @@ def test_submit_dag(api_client):
             {"key": "child", "name": "Child", "estimated_duration": 1, "depends_on": ["root"]},
         ]
     }
-    response =  api_client.post("/api/v1/jobs/dag", json=payload, headers=api_client.operator_headers)
+    response = api_client.post(
+        "/api/v1/jobs/dag", json=payload, headers=api_client.operator_headers
+    )
     assert response.status_code == 201
     jobs = response.json()["jobs"]
     assert len(jobs) == 2
@@ -121,16 +108,21 @@ def test_cancel_job(api_client):
     create_res = api_client.post(
         "/api/v1/jobs/",
         json={"name": "Cancel Me", "estimated_duration": 1},
+        headers=api_client.operator_headers,
     )
     job_id = create_res.json()["id"]
-    cancel_res = api_client.post(f"/api/v1/jobs/{job_id}/cancel")
+    cancel_res = api_client.post(
+        f"/api/v1/jobs/{job_id}/cancel", headers=api_client.operator_headers
+    )
     assert cancel_res.status_code == 200
     assert cancel_res.json()["status"] == "CANCELLED"
+
 
 def test_get_run_logs_preview(api_client):
     create_res = api_client.post(
         "/api/v1/jobs/",
         json={"name": "Log Job", "estimated_duration": 1},
+        headers=api_client.operator_headers,
     )
     job_id = create_res.json()["id"]
 
@@ -144,7 +136,10 @@ def test_get_run_logs_preview(api_client):
         ExecutionResult(success=True, exit_code=0, stdout="hello"),
     )
 
-    response = api_client.get(f"/api/v1/jobs/{job_id}/runs/{run.id}/logs", json=payload, headers=api_client.operator_headers)
+    response = api_client.get(
+        f"/api/v1/jobs/{job_id}/runs/{run.id}/logs",
+        headers=api_client.operator_headers,
+    )
     assert response.status_code == 200
     assert response.json()["stdout"] == "hello"
 
@@ -154,13 +149,15 @@ def test_list_dlq(api_client, monkeypatch):
         "src.orchestrator.job_manager.job_stream.list_dlq",
         lambda count=100: [{"message_id": "1-0", "job_id": "abc", "reason": "boom"}],
     )
-    response = api_client.get("/api/v1/dlq")
+    response = api_client.get("/api/v1/dlq", headers=api_client.operator_headers)
     assert response.status_code == 200
     assert response.json()["total"] == 1
+
 
 def test_unauthenticated_request_rejected(api_client, monkeypatch):
     monkeypatch.setenv("AUTH_ENABLED", "true")
     from src.core import config
+
     config.settings = config.Settings()
 
     response = api_client.get("/api/v1/jobs/")

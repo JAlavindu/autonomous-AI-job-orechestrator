@@ -403,7 +403,7 @@ class JobManager:
                 db.rollback()
                 raise
 
-        def finish_run(self, run_id: str, status: JobStatus, result: ExecutionResult) -> None:
+    def finish_run(self, run_id: str, status: JobStatus, result: ExecutionResult) -> None:
         with self.session_factory() as db:
             try:
                 run = db.get(RunRow, run_id)
@@ -482,7 +482,7 @@ class JobManager:
 
         return True
 
-        def enqueue_job(self, job_id: str) -> str:
+    def enqueue_job(self, job_id: str) -> str:
         return job_stream.enqueue(job_id)
 
     def get_run_logs(self, job_id: str, run_id: str, full: bool = False) -> Optional[dict]:

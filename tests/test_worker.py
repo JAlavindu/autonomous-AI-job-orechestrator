@@ -1,3 +1,5 @@
+import threading
+
 import pytest
 from dataclasses import dataclass
 
@@ -32,6 +34,11 @@ class FakeJobManager:
     def finish_run(self, run_id: str, status, result):
         return None
 
+    def handle_execution_failure(self, job_id, run_id, result, source_message_id=None):
+        self.finish_run(run_id, JobStatus.FAILED, result)
+        self.update_job_status(job_id, JobStatus.FAILED)
+        return "failed", 0.0
+
 
 def _read_once_then_stop(job_id: str):
     calls = {"n": 0}
@@ -45,15 +52,31 @@ def _read_once_then_stop(job_id: str):
     return _read
 
 
+def _patch_lease(monkeypatch):
+    monkeypatch.setattr(worker.lease_store, "acquire", lambda job_id, worker_id, ttl_seconds=None: True)
+    monkeypatch.setattr(worker.lease_store, "renew", lambda job_id, worker_id, ttl_seconds=None: True)
+    monkeypatch.setattr(worker.lease_store, "release", lambda job_id, worker_id: None)
+    monkeypatch.setattr(worker.lease_store, "get_holder", lambda job_id: None)
+
+
 def _patch_stream(monkeypatch, job_id: str, fake_mgr: FakeJobManager):
     monkeypatch.setattr(worker.job_stream, "ensure_group", lambda: None)
     monkeypatch.setattr(worker.job_stream, "read", _read_once_then_stop(job_id))
+    monkeypatch.setattr(worker.job_stream, "claim_stale_messages", lambda *args, **kwargs: [])
     monkeypatch.setattr(
         worker.job_stream,
         "ack",
         lambda message_id: fake_mgr.acked.append(message_id) or 1,
     )
     monkeypatch.setattr(worker, "job_manager", fake_mgr)
+    _patch_lease(monkeypatch)
+
+    def _immediate_stop(job_id: str, worker_id: str) -> threading.Event:
+        stop = threading.Event()
+        stop.set()
+        return stop
+
+    monkeypatch.setattr(worker, "_start_heartbeat", _immediate_stop)
 
 
 def test_failed_job_is_not_overwritten_as_completed(monkeypatch):

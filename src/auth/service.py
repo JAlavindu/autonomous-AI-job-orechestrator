@@ -55,6 +55,32 @@ class ApiKeyService:
             db.refresh(row)
             return row, raw_key
 
+    def import_key(
+        self,
+        raw_key: str,
+        name: str,
+        role: Role,
+        tenant_id: str | None = None,
+    ) -> ApiKeyRow:
+        """Store a known raw key (e.g. bootstrap from env)."""
+        hashed = hash_api_key(raw_key, settings.API_KEY_PEPPER)
+
+        with self.session_factory() as db:
+            self._ensure_default_tenant(db)
+            row = ApiKeyRow(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id or settings.DEFAULT_TENANT_ID,
+                name=name,
+                key_prefix=key_prefix(raw_key),
+                key_hash=hashed,
+                role=role.value,
+                enabled=True,
+            )
+            db.add(row)
+            db.commit()
+            db.refresh(row)
+            return row
+
     def validate_key(self, raw_key: str) -> Optional[Principal]:
         if not raw_key:
             return None
@@ -108,12 +134,12 @@ class ApiKeyService:
             if count > 0:
                 return None
 
-        _, created_raw = self.create_key(name="bootstrap-operator", role=Role.OPERATOR)
+        self.import_key(raw, name="bootstrap-operator", role=Role.OPERATOR)
         logger.warning(
-            "Bootstrapped operator API key with prefix %s (store it securely; shown once in env AUTH_BOOTSTRAP_OPERATOR_KEY)",
-            key_prefix(created_raw),
+            "Bootstrapped operator API key with prefix %s from AUTH_BOOTSTRAP_OPERATOR_KEY",
+            key_prefix(raw),
         )
-        return created_raw
+        return raw
 
 
 api_key_service = ApiKeyService()

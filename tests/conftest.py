@@ -4,7 +4,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import src.api.admin_routes as admin_routes
 import src.api.routes as routes
+import src.auth.deps as auth_deps
 import src.db.models  # noqa: F401
 from src.auth.service import ApiKeyService
 from src.core import config
@@ -38,6 +40,8 @@ def api_client(monkeypatch):
     routes.job_manager = JobManager(session_factory=TestingSession)
 
     key_service = ApiKeyService(session_factory=TestingSession)
+    monkeypatch.setattr(auth_deps, "api_key_service", key_service)
+    monkeypatch.setattr(admin_routes, "api_key_service", key_service)
     _, operator_key = key_service.create_key("test-operator", Role.OPERATOR)
     _, viewer_key = key_service.create_key("test-viewer", Role.VIEWER)
 

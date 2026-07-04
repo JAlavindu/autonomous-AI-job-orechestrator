@@ -146,8 +146,8 @@ class JobStreamQueue:
     def pending_count(self) -> int:
         summary = self.client.xpending(self.stream_key, self.group)
         return int(summary.get("pending", 0) if isinstance(summary, dict) else summary[0])
-    
-        def list_dlq(self, count: int = 100) -> list[dict]:
+
+    def list_dlq(self, count: int = 100) -> list[dict]:
         rows = self.client.xrevrange(self.dlq_key, max="+", min="-", count=count)
         items: list[dict] = []
         for message_id, fields in rows:
