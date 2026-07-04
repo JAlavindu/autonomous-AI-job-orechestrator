@@ -22,13 +22,14 @@ class JobManager:
     def __init__(self, session_factory=SessionLocal):
         self.session_factory = session_factory
 
-    def _ensure_default_tenant(self, db: Session) -> TenantRow:
-        tenant = db.get(TenantRow, settings.DEFAULT_TENANT_ID)
+    def _ensure_default_tenant(self, db: Session, tenant_id: str | None = None) -> TenantRow:
+        tenant_id = tenant_id or settings.DEFAULT_TENANT_ID
+        tenant = db.get(TenantRow, tenant_id)
         if tenant:
             return tenant
 
         tenant = TenantRow(
-            id=settings.DEFAULT_TENANT_ID,
+            id=tenant_id,
             name=settings.DEFAULT_TENANT_NAME,
         )
         db.add(tenant)
@@ -64,6 +65,7 @@ class JobManager:
             id=row.id,
             name=row.name,
             description=row.description,
+            tenant_id=row.tenant_id,
             priority=row.priority,
             deadline=row.deadline,
             estimated_duration=row.est_duration,
@@ -99,26 +101,40 @@ class JobManager:
         delay = settings.RETRY_BACKOFF_BASE_SECONDS * (2 ** max(retry_count, 0))
         return min(delay, settings.RETRY_BACKOFF_MAX_SECONDS)
 
-    def create_job(self, job_create: JobCreate) -> Job:
+    def _get_job_row(
+        self, db: Session, job_id: str, tenant_id: str | None = None
+    ) -> JobRow | None:
+        row = db.get(JobRow, job_id)
+        if not row:
+            return None
+        if tenant_id and row.tenant_id != tenant_id:
+            return None
+        return row
+
+    def create_job(self, job_create: JobCreate, tenant_id: str) -> Job:
         job = Job(**job_create.model_dump())
 
         with self.session_factory() as db:
             try:
-                self._ensure_default_tenant(db)
+                self._ensure_default_tenant(db, tenant_id)
 
                 if job.idempotency_key:
                     existing = db.scalar(
                         select(JobRow).where(
-                            JobRow.tenant_id == settings.DEFAULT_TENANT_ID,
+                            JobRow.tenant_id == tenant_id,
                             JobRow.idempotency_key == job.idempotency_key,
                         )
                     )
                     if existing:
                         return self._to_model(db, existing)
 
+                executor_type = (job.payload or {}).get("type") or "sleep"
+                tenant_policy.validate_executor_type(tenant_id, executor_type)
+                tenant_policy.enforce_job_quota(db, tenant_id)
+
                 row = JobRow(
                     id=job.id,
-                    tenant_id=settings.DEFAULT_TENANT_ID,
+                    tenant_id=tenant_id,
                     name=job.name,
                     description=job.description,
                     priority=job.priority,
@@ -141,6 +157,7 @@ class JobManager:
 
                 self._audit(
                     db,
+                    tenant_id=tenant_id,
                     action="job.created",
                     target=f"job:{job.id}",
                     payload={
@@ -152,7 +169,7 @@ class JobManager:
                 db.commit()
                 db.refresh(row)
                 created = self._to_model(db, row)
-                if job_create.enqueue and self.are_dependencies_met(created):
+                if job_create.enqueue and self.are_dependencies_met(created, tenant_id=tenant_id):
                     self.enqueue_job(created.id)
                 return created
             except IntegrityError:
@@ -161,7 +178,7 @@ class JobManager:
                     with self.session_factory() as retry_db:
                         existing = retry_db.scalar(
                             select(JobRow).where(
-                                JobRow.tenant_id == settings.DEFAULT_TENANT_ID,
+                                JobRow.tenant_id == tenant_id,
                                 JobRow.idempotency_key == job.idempotency_key,
                             )
                         )
@@ -172,7 +189,7 @@ class JobManager:
                 db.rollback()
                 raise
 
-    def create_dag(self, nodes: List[DagJobCreate]) -> List[Job]:
+    def create_dag(self, nodes: List[DagJobCreate], tenant_id: str) -> List[Job]:
         keys = [node.key for node in nodes]
         if len(keys) != len(set(keys)):
             raise ValueError("DAG job keys must be unique")
@@ -185,7 +202,14 @@ class JobManager:
 
         with self.session_factory() as db:
             try:
-                self._ensure_default_tenant(db)
+                self._ensure_default_tenant(db, tenant_id)
+
+                for node in nodes:
+                    executor_type = (node.payload or {}).get("type") or "sleep"
+                    tenant_policy.validate_executor_type(tenant_id, executor_type)
+
+                tenant_policy.enforce_job_quota(db, tenant_id, additional=len(nodes))
+
                 key_to_id: dict[str, str] = {}
                 rows: list[tuple[DagJobCreate, JobRow]] = []
 
@@ -194,7 +218,7 @@ class JobManager:
                     key_to_id[node.key] = job_id
                     row = JobRow(
                         id=job_id,
-                        tenant_id=settings.DEFAULT_TENANT_ID,
+                        tenant_id=tenant_id,
                         name=node.name,
                         description=node.description,
                         priority=node.priority,
@@ -220,6 +244,7 @@ class JobManager:
 
                 self._audit(
                     db,
+                    tenant_id=tenant_id,
                     action="dag.created",
                     target="dag:batch",
                     payload={"job_keys": keys},
@@ -231,9 +256,9 @@ class JobManager:
                 db.rollback()
                 raise
 
-    def get_job(self, job_id: str) -> Optional[Job]:
+    def get_job(self, job_id: str, tenant_id: str | None = None) -> Optional[Job]:
         with self.session_factory() as db:
-            row = db.get(JobRow, job_id)
+            row = self._get_job_row(db, job_id, tenant_id)
             if not row:
                 return None
             return self._to_model(db, row)
@@ -243,6 +268,7 @@ class JobManager:
         status: JobStatus | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> Tuple[List[Job], int]:
         with self.session_factory() as db:
             stmt = select(JobRow)
@@ -253,13 +279,19 @@ class JobManager:
                 stmt = stmt.where(JobRow.status == status_value)
                 count_stmt = count_stmt.where(JobRow.status == status_value)
 
+            if tenant_id:
+                stmt = stmt.where(JobRow.tenant_id == tenant_id)
+                count_stmt = count_stmt.where(JobRow.tenant_id == tenant_id)
+
             total = db.scalar(count_stmt) or 0
             stmt = stmt.order_by(JobRow.created_at.asc(), JobRow.id.asc()).limit(limit).offset(offset)
             jobs = [self._to_model(db, row) for row in db.scalars(stmt).all()]
             return jobs, int(total)
 
-    def get_runs(self, job_id: str) -> Tuple[List[Run], int]:
+    def get_runs(self, job_id: str, tenant_id: str) -> Tuple[List[Run], int]:
         with self.session_factory() as db:
+            if not self._get_job_row(db, job_id, tenant_id):
+                return [], 0
             stmt = (
                 select(RunRow)
                 .where(RunRow.job_id == job_id)
@@ -268,8 +300,10 @@ class JobManager:
             rows = list(db.scalars(stmt).all())
             return [self._run_to_model(row) for row in rows], len(rows)
 
-    def get_run(self, job_id: str, run_id: str) -> Optional[Run]:
+    def get_run(self, job_id: str, run_id: str, tenant_id: str) -> Optional[Run]:
         with self.session_factory() as db:
+            if not self._get_job_row(db, job_id, tenant_id):
+                return None
             row = db.get(RunRow, run_id)
             if not row or row.job_id != job_id:
                 return None
@@ -304,6 +338,7 @@ class JobManager:
 
                 self._audit(
                     db,
+                    tenant_id=row.tenant_id,
                     action="job.status_changed",
                     target=f"job:{job_id}",
                     payload={"from": previous_status, "to": row.status, "worker_id": row.worker_id},
@@ -315,10 +350,10 @@ class JobManager:
                 db.rollback()
                 raise
 
-    def cancel_job(self, job_id: str, actor: str = "api") -> Optional[Job]:
+    def cancel_job(self, job_id: str, tenant_id: str, actor: str = "api") -> Optional[Job]:
         with self.session_factory() as db:
             try:
-                row = db.get(JobRow, job_id)
+                row = self._get_job_row(db, job_id, tenant_id)
                 if not row:
                     return None
 
@@ -335,6 +370,7 @@ class JobManager:
 
                 self._audit(
                     db,
+                    tenant_id=tenant_id,
                     action="job.cancelled",
                     target=f"job:{job_id}",
                     payload={"from": previous_status},
@@ -347,25 +383,25 @@ class JobManager:
                 db.rollback()
                 raise
 
-    def retry_job(self, job_id: str, actor: str = "api") -> Optional[Job]:
-        job = self.get_job(job_id)
+    def retry_job(self, job_id: str, tenant_id: str, actor: str = "api") -> Optional[Job]:
+        job = self.get_job(job_id, tenant_id=tenant_id)
         if not job:
             return None
 
         if job.status not in {JobStatus.FAILED, JobStatus.CANCELLED, JobStatus.RETRYING}:
             raise ValueError(f"Job {job_id} cannot be retried from status {job.status}")
 
-        if not self.are_dependencies_met(job):
+        if not self.are_dependencies_met(job, tenant_id=tenant_id):
             raise ValueError(f"Job {job_id} dependencies are not met")
 
         updated = self.update_job_status(job_id, JobStatus.PENDING)
-        self._audit_manual(job_id, "job.manual_retry", actor)
+        self._audit_manual(job_id, "job.manual_retry", actor, tenant_id)
         self.enqueue_job(job_id)
         return updated
 
-    def _audit_manual(self, job_id: str, action: str, actor: str) -> None:
+    def _audit_manual(self, job_id: str, action: str, actor: str, tenant_id: str) -> None:
         with self.session_factory() as db:
-            self._audit(db, action=action, target=f"job:{job_id}", actor=actor)
+            self._audit(db, tenant_id=tenant_id, action=action, target=f"job:{job_id}", actor=actor)
             db.commit()
 
     def start_run(self, job_id: str, worker_id: str) -> Optional[RunRow]:
@@ -393,6 +429,7 @@ class JobManager:
                 db.add(run)
                 self._audit(
                     db,
+                    tenant_id=job.tenant_id,
                     action="run.started",
                     target=f"run:{run.id}",
                     payload={"job_id": job_id, "attempt": attempt, "worker_id": worker_id},
@@ -411,6 +448,8 @@ class JobManager:
                 if not run:
                     return
 
+                job = db.get(JobRow, run.job_id)
+
                 persisted = persist_run_output(
                     run_id=run_id,
                     stdout=result.stdout,
@@ -428,6 +467,7 @@ class JobManager:
                 run.metrics = {"duration_seconds": result.duration_seconds}
                 self._audit(
                     db,
+                    tenant_id=job.tenant_id if job else settings.DEFAULT_TENANT_ID,
                     action="run.finished",
                     target=f"run:{run.id}",
                     payload={
@@ -463,21 +503,22 @@ class JobManager:
         if job.retry_count < settings.MAX_JOB_RETRIES:
             delay = self._retry_backoff_seconds(job.retry_count)
             self.update_job_status(job_id, JobStatus.RETRYING)
-            self._audit_manual(job_id, "job.retry_scheduled", "worker")
+            self._audit_manual(job_id, "job.retry_scheduled", "worker", job.tenant_id)
             return "retry", delay
 
         self.update_job_status(job_id, JobStatus.FAILED)
         reason = result.error_message or f"exit_code={result.exit_code}"
         job_stream.send_to_dlq(job_id, reason=reason, source_message_id=source_message_id)
-        self._audit_manual(job_id, "job.dlq", "worker")
+        self._audit_manual(job_id, "job.dlq", "worker", job.tenant_id)
         return "dlq", 0.0
 
-    def are_dependencies_met(self, job: Job) -> bool:
+    def are_dependencies_met(self, job: Job, tenant_id: str | None = None) -> bool:
         if not job.dependencies:
             return True
 
+        tid = tenant_id or job.tenant_id or settings.DEFAULT_TENANT_ID
         for parent_id in job.dependencies:
-            parent_job = self.get_job(parent_id)
+            parent_job = self.get_job(parent_id, tenant_id=tid)
             if not parent_job or parent_job.status != JobStatus.COMPLETED:
                 return False
 
@@ -486,8 +527,12 @@ class JobManager:
     def enqueue_job(self, job_id: str) -> str:
         return job_stream.enqueue(job_id)
 
-    def get_run_logs(self, job_id: str, run_id: str, full: bool = False) -> Optional[dict]:
+    def get_run_logs(
+        self, job_id: str, run_id: str, tenant_id: str, full: bool = False
+    ) -> Optional[dict]:
         with self.session_factory() as db:
+            if not self._get_job_row(db, job_id, tenant_id):
+                return None
             row = db.get(RunRow, run_id)
             if not row or row.job_id != job_id:
                 return None
@@ -510,8 +555,25 @@ class JobManager:
             merged["job_id"] = row.job_id
             return merged
 
-    def list_dlq(self, limit: int = 100) -> list[dict]:
-        return job_stream.list_dlq(count=limit)
+    def list_dlq(self, limit: int = 100, tenant_id: str | None = None) -> list[dict]:
+        items = job_stream.list_dlq(count=limit if not tenant_id else limit * 10)
+        if not tenant_id:
+            return items[:limit]
+        filtered = []
+        for item in items:
+            if self.get_job(item.get("job_id", ""), tenant_id=tenant_id):
+                filtered.append(item)
+            if len(filtered) >= limit:
+                break
+        return filtered
+
+    def get_executor_allowlist_for_job(self, job_id: str) -> set[str]:
+        with self.session_factory() as db:
+            row = db.get(JobRow, job_id)
+            if not row:
+                return settings.executor_allowlist
+            tenant = tenant_policy.get_tenant(db, row.tenant_id)
+            return tenant_policy.executor_allowlist_for(tenant)
 
 
 job_manager = JobManager()

@@ -6,7 +6,7 @@ from src.db.session import get_engine
 
 
 def _uses_postgres() -> bool:
-    return get_engine().dialect.name == "postgresql"led
+    return get_engine().dialect.name == "postgresql"
 
 
 @pytest.mark.skipif(not _uses_postgres(), reason="Requires Postgres DATABASE_URL")

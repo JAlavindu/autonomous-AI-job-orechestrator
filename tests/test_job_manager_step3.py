@@ -8,9 +8,13 @@ from sqlalchemy.pool import StaticPool
 import src.db.models  # noqa: F401
 from src.db.base import Base
 from src.db.models import JobRow
+from src.core.config import settings
 from src.models.job import DagJobCreate, JobCreate, JobStatus
 from src.orchestrator.executors.base import ExecutionResult
 from src.orchestrator.job_manager import JobManager
+from src.tenancy.policy import tenant_policy
+
+TENANT = settings.DEFAULT_TENANT_ID
 
 
 @pytest.fixture
@@ -38,36 +42,37 @@ def session_factory():
 
 @pytest.fixture
 def manager(session_factory):
+    tenant_policy.session_factory = session_factory
     return JobManager(session_factory=session_factory)
 
 
 def test_idempotency_returns_existing_job(manager):
     payload = JobCreate(name="once", estimated_duration=1, idempotency_key="abc")
-    first = manager.create_job(payload)
-    second = manager.create_job(payload)
+    first = manager.create_job(payload, tenant_id=TENANT)
+    second = manager.create_job(payload, tenant_id=TENANT)
     assert first.id == second.id
 
 
 def test_cancel_job(manager):
-    job = manager.create_job(JobCreate(name="cancel-me", estimated_duration=1))
-    cancelled = manager.cancel_job(job.id)
+    job = manager.create_job(JobCreate(name="cancel-me", estimated_duration=1), tenant_id=TENANT)
+    cancelled = manager.cancel_job(job.id, tenant_id=TENANT)
     assert cancelled.status == JobStatus.CANCELLED
 
 
 def test_retry_job_from_failed(manager, monkeypatch):
-    job = manager.create_job(JobCreate(name="retry-me", estimated_duration=1))
+    job = manager.create_job(JobCreate(name="retry-me", estimated_duration=1), tenant_id=TENANT)
     manager.update_job_status(job.id, JobStatus.FAILED)
 
     enqueued = []
     monkeypatch.setattr(manager, "enqueue_job", lambda job_id: enqueued.append(job_id) or "1-0")
 
-    retried = manager.retry_job(job.id)
+    retried = manager.retry_job(job.id, tenant_id=TENANT)
     assert retried.status == JobStatus.PENDING
     assert enqueued == [job.id]
 
 
 def test_handle_execution_failure_retries_then_dlq(manager, monkeypatch):
-    job = manager.create_job(JobCreate(name="flaky", estimated_duration=1))
+    job = manager.create_job(JobCreate(name="flaky", estimated_duration=1), tenant_id=TENANT)
     run = manager.start_run(job.id, "worker-a")
     result = ExecutionResult(success=False, exit_code=1, error_message="boom")
 
@@ -98,7 +103,8 @@ def test_create_dag(manager):
         [
             DagJobCreate(key="a", name="A", estimated_duration=1),
             DagJobCreate(key="b", name="B", estimated_duration=1, depends_on=["a"]),
-        ]
+        ],
+        tenant_id=TENANT,
     )
     assert len(jobs) == 2
     child = next(j for j in jobs if j.name == "B")
@@ -107,7 +113,7 @@ def test_create_dag(manager):
 
 
 def test_finish_run_truncates_or_spills_output(manager):
-    job = manager.create_job(JobCreate(name="big-output", estimated_duration=1))
+    job = manager.create_job(JobCreate(name="big-output", estimated_duration=1), tenant_id=TENANT)
     run = manager.start_run(job.id, "worker-a")
     huge = "x" * 100_000
     manager.finish_run(
@@ -115,14 +121,14 @@ def test_finish_run_truncates_or_spills_output(manager):
         JobStatus.COMPLETED,
         ExecutionResult(success=True, exit_code=0, stdout=huge),
     )
-    runs, _ = manager.get_runs(job.id)
+    runs, _ = manager.get_runs(job.id, tenant_id=TENANT)
     assert runs[0].log_ref is not None
     assert "truncated" in (runs[0].stdout or "")
 
 
 def test_list_jobs_filter_and_count(manager):
-    manager.create_job(JobCreate(name="p1", estimated_duration=1))
-    j2 = manager.create_job(JobCreate(name="p2", estimated_duration=1))
+    manager.create_job(JobCreate(name="p1", estimated_duration=1), tenant_id=TENANT)
+    j2 = manager.create_job(JobCreate(name="p2", estimated_duration=1), tenant_id=TENANT)
     manager.update_job_status(j2.id, JobStatus.COMPLETED)
 
     pending, pending_total = manager.list_jobs(status=JobStatus.PENDING)

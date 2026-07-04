@@ -18,6 +18,7 @@ from src.models.job import (
     RunLogsResponse,
 )
 from src.orchestrator.job_manager import job_manager
+from src.tenancy.exceptions import QuotaExceededError
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -31,9 +32,13 @@ logger = get_logger(__name__)
 )
 def create_job(job_create: JobCreate, principal: Principal = Depends(get_current_principal)):
     try:
-        job = job_manager.create_job(job_create)
+        job = job_manager.create_job(job_create, tenant_id=principal.tenant_id)
         logger.info("Created job %s (%s) by %s", job.name, job.id, principal.name)
         return job
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=429, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.exception("Failed to create job: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -47,9 +52,11 @@ def create_job(job_create: JobCreate, principal: Principal = Depends(get_current
 )
 def submit_dag(body: DagSubmit, principal: Principal = Depends(get_current_principal)):
     try:
-        jobs = job_manager.create_dag(body.jobs)
+        jobs = job_manager.create_dag(body.jobs, tenant_id=principal.tenant_id)
         logger.info("Created DAG with %s jobs by %s", len(jobs), principal.name)
         return DagSubmitResponse(jobs=jobs)
+    except QuotaExceededError as e:
+        raise HTTPException(status_code=429, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
@@ -66,8 +73,11 @@ def list_jobs(
     status_filter: Optional[JobStatus] = Query(default=None, alias="status"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    principal: Principal = Depends(get_current_principal),
 ):
-    items, total = job_manager.list_jobs(status=status_filter, limit=limit, offset=offset)
+    items, total = job_manager.list_jobs(
+        status=status_filter, limit=limit, offset=offset, tenant_id=principal.tenant_id
+    )
     return JobListResponse(items=items, total=total, limit=limit, offset=offset)
 
 
@@ -76,8 +86,8 @@ def list_jobs(
     response_model=Job,
     dependencies=[Depends(require_min_role(Role.VIEWER))],
 )
-def get_job(job_id: str):
-    job = job_manager.get_job(job_id)
+def get_job(job_id: str, principal: Principal = Depends(get_current_principal)):
+    job = job_manager.get_job(job_id, tenant_id=principal.tenant_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
@@ -90,7 +100,9 @@ def get_job(job_id: str):
 )
 def cancel_job(job_id: str, principal: Principal = Depends(get_current_principal)):
     try:
-        job = job_manager.cancel_job(job_id, actor=f"api:{principal.name}")
+        job = job_manager.cancel_job(
+            job_id, tenant_id=principal.tenant_id, actor=f"api:{principal.name}"
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     if not job:
@@ -106,7 +118,9 @@ def cancel_job(job_id: str, principal: Principal = Depends(get_current_principal
 )
 def retry_job(job_id: str, principal: Principal = Depends(get_current_principal)):
     try:
-        job = job_manager.retry_job(job_id, actor=f"api:{principal.name}")
+        job = job_manager.retry_job(
+            job_id, tenant_id=principal.tenant_id, actor=f"api:{principal.name}"
+        )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     if not job:
@@ -120,10 +134,10 @@ def retry_job(job_id: str, principal: Principal = Depends(get_current_principal)
     response_model=RunListResponse,
     dependencies=[Depends(require_min_role(Role.VIEWER))],
 )
-def list_runs(job_id: str):
-    if not job_manager.get_job(job_id):
+def list_runs(job_id: str, principal: Principal = Depends(get_current_principal)):
+    if not job_manager.get_job(job_id, tenant_id=principal.tenant_id):
         raise HTTPException(status_code=404, detail="Job not found")
-    items, total = job_manager.get_runs(job_id)
+    items, total = job_manager.get_runs(job_id, tenant_id=principal.tenant_id)
     return RunListResponse(items=items, total=total)
 
 
@@ -132,8 +146,8 @@ def list_runs(job_id: str):
     response_model=Run,
     dependencies=[Depends(require_min_role(Role.VIEWER))],
 )
-def get_run(job_id: str, run_id: str):
-    run = job_manager.get_run(job_id, run_id)
+def get_run(job_id: str, run_id: str, principal: Principal = Depends(get_current_principal)):
+    run = job_manager.get_run(job_id, run_id, tenant_id=principal.tenant_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
@@ -148,8 +162,11 @@ def get_run_logs(
     job_id: str,
     run_id: str,
     full: bool = Query(default=False, description="Load full spilled logs from object storage"),
+    principal: Principal = Depends(get_current_principal),
 ):
-    logs = job_manager.get_run_logs(job_id, run_id, full=full)
+    logs = job_manager.get_run_logs(
+        job_id, run_id, tenant_id=principal.tenant_id, full=full
+    )
     if not logs:
         raise HTTPException(status_code=404, detail="Run not found")
     return RunLogsResponse(**logs)
@@ -160,6 +177,9 @@ def get_run_logs(
     response_model=DlqListResponse,
     dependencies=[Depends(require_min_role(Role.OPERATOR))],
 )
-def list_dlq(limit: int = Query(default=100, ge=1, le=1000)):
-    items = job_manager.list_dlq(limit=limit)
+def list_dlq(
+    limit: int = Query(default=100, ge=1, le=1000),
+    principal: Principal = Depends(get_current_principal),
+):
+    items = job_manager.list_dlq(limit=limit, tenant_id=principal.tenant_id)
     return DlqListResponse(items=items, total=len(items))

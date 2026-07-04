@@ -39,6 +39,9 @@ class FakeJobManager:
         self.update_job_status(job_id, JobStatus.FAILED)
         return "failed", 0.0
 
+    def get_executor_allowlist_for_job(self, job_id: str):
+        return {"shell", "sleep"}
+
 
 def _read_once_then_stop(job_id: str):
     calls = {"n": 0}
@@ -90,7 +93,9 @@ def test_failed_job_is_not_overwritten_as_completed(monkeypatch):
     monkeypatch.setattr(
         worker,
         "execute_job",
-        lambda j: ExecutionResult(success=False, exit_code=1, error_message="boom"),
+        lambda j, executor_allowlist=None: ExecutionResult(
+            success=False, exit_code=1, error_message="boom"
+        ),
     )
 
     with pytest.raises(KeyboardInterrupt):
@@ -114,7 +119,7 @@ def test_worker_does_not_sleep_for_estimated_duration(monkeypatch):
     monkeypatch.setattr(
         worker,
         "execute_job",
-        lambda j: ExecutionResult(success=True, exit_code=0, stdout="hi"),
+        lambda j, executor_allowlist=None: ExecutionResult(success=True, exit_code=0, stdout="hi"),
     )
     monkeypatch.setattr(worker.time, "sleep", lambda s: sleep_calls.append(s))
 

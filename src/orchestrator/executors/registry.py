@@ -11,17 +11,18 @@ _EXECUTORS: dict[str, BaseExecutor] = {
     "sleep": SleepExecutor(),
 }
 
-def execute_job(job: Job) -> ExecutionResult:
+def execute_job(job: Job, executor_allowlist: set[str] | None = None) -> ExecutionResult:
     job_type = job.payload.get("type") or "sleep"
+    allowlist = executor_allowlist or settings.executor_allowlist
 
-    if job_type not in settings.executor_allowlist:
+    if job_type not in allowlist:
         return ExecutionResult(
             success=False,
             exit_code=1,
-            error_message=f"Executor '{job_type}' is disabled by policy (not in EXECUTOR_ALLOWLIST)",
+            error_message=f"Executor '{job_type}' is disabled by tenant policy",
         )
     executor = _EXECUTORS.get(job_type)
     if not executor:
         return ExecutionResult(success=False, exit_code=1, error_message=f"Unknown payload.type: {job_type}")
-    
+
     return executor.execute(job)

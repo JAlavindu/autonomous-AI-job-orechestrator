@@ -1,10 +1,11 @@
+import json
+import uuid
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field
-from datetime import datetime
-import uuid
-import json
+
 from pydantic import BaseModel, Field, field_validator
+
 from src.core.config import settings
 
 

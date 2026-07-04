@@ -4,12 +4,16 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import src.db.models  # noqa: F401
+from src.core.config import settings
 from src.db.base import Base
 from src.db.models import RunRow
 from src.models.job import JobCreate, JobStatus
 from src.orchestrator.executors.base import ExecutionResult
 from src.orchestrator.job_manager import JobManager
 from src.storage.run_logs import load_full_run_logs, persist_run_output
+from src.tenancy.policy import tenant_policy
+
+TENANT = settings.DEFAULT_TENANT_ID
 
 
 @pytest.fixture
@@ -33,6 +37,7 @@ def manager(tmp_path, monkeypatch):
         expire_on_commit=False,
         future=True,
     )
+    tenant_policy.session_factory = TestingSession
     return JobManager(session_factory=TestingSession)
 
 
@@ -52,8 +57,8 @@ def test_persist_run_output_spills_large_stdout(tmp_path, monkeypatch):
     assert full["stdout"] == huge
 
 
-def test_finish_run_sets_log_ref(manager, session_factory):
-    job = manager.create_job(JobCreate(name="log-job", estimated_duration=1))
+def test_finish_run_sets_log_ref(manager):
+    job = manager.create_job(JobCreate(name="log-job", estimated_duration=1), tenant_id=TENANT)
     run = manager.start_run(job.id, "worker-a")
     huge = "y" * 10000
     manager.finish_run(
@@ -62,10 +67,10 @@ def test_finish_run_sets_log_ref(manager, session_factory):
         ExecutionResult(success=True, exit_code=0, stdout=huge),
     )
 
-    with session_factory() as db:
+    with manager.session_factory() as db:
         row = db.scalar(select(RunRow).where(RunRow.id == run.id))
         assert row.log_ref is not None
         assert "truncated" in (row.stdout or "")
 
-    logs = manager.get_run_logs(job.id, run.id, full=True)
+    logs = manager.get_run_logs(job.id, run.id, tenant_id=TENANT, full=True)
     assert logs["stdout"] == huge

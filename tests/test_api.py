@@ -145,9 +145,16 @@ def test_get_run_logs_preview(api_client):
 
 
 def test_list_dlq(api_client, monkeypatch):
+    create = api_client.post(
+        "/api/v1/jobs/",
+        json={"name": "dlq-job", "estimated_duration": 1},
+        headers=api_client.operator_headers,
+    )
+    assert create.status_code == 201
+    job_id = create.json()["id"]
     monkeypatch.setattr(
         "src.orchestrator.job_manager.job_stream.list_dlq",
-        lambda count=100: [{"message_id": "1-0", "job_id": "abc", "reason": "boom"}],
+        lambda count=100: [{"message_id": "1-0", "job_id": job_id, "reason": "boom"}],
     )
     response = api_client.get("/api/v1/dlq", headers=api_client.operator_headers)
     assert response.status_code == 200

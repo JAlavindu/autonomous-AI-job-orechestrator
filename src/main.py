@@ -11,6 +11,7 @@ from src.core.config import settings
 from src.core.logging_config import RequestIdMiddleware, get_logger, setup_logging
 from src.db.stream_queue import job_stream
 from src.storage.log_store import log_store
+from src.tenancy.middleware import RequestSizeLimitMiddleware
 
 setup_logging(settings.LOG_LEVEL)
 logger = get_logger(__name__)
@@ -43,6 +44,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestIdMiddleware)
+app.add_middleware(RequestSizeLimitMiddleware)
 app.include_router(health_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
