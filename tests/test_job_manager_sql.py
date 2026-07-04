@@ -45,7 +45,9 @@ def test_create_get_and_list_jobs_persist_in_sql(manager):
     )
 
     fetched = manager.get_job(created.id)
-    listed = manager.list_jobs()
+    listed, total = manager.list_jobs()
+    assert total == 1
+    assert [job.id for job in listed] == [created.id]
 
     assert fetched is not None
     assert fetched.id == created.id

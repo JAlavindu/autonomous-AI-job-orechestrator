@@ -71,3 +71,56 @@ def test_job_persistence(api_client):
 def test_get_nonexistent_job(api_client):
     response = api_client.get("/api/v1/jobs/non-existent-id")
     assert response.status_code == 404
+
+
+def test_list_jobs_paginated(api_client):
+    api_client.post("/api/v1/jobs/", json={"name": "A", "estimated_duration": 1})
+    api_client.post("/api/v1/jobs/", json={"name": "B", "estimated_duration": 1})
+
+    response = api_client.get("/api/v1/jobs/?limit=1&offset=0")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 1
+    assert body["limit"] == 1
+    assert body["offset"] == 0
+
+
+def test_idempotency_key(api_client):
+    payload = {
+        "name": "Idempotent Job",
+        "estimated_duration": 1,
+        "idempotency_key": "idem-123",
+    }
+    first = api_client.post("/api/v1/jobs/", json=payload)
+    second = api_client.post("/api/v1/jobs/", json=payload)
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+
+
+def test_submit_dag(api_client):
+    payload = {
+        "jobs": [
+            {"key": "root", "name": "Root", "estimated_duration": 1, "depends_on": []},
+            {"key": "child", "name": "Child", "estimated_duration": 1, "depends_on": ["root"]},
+        ]
+    }
+    response = api_client.post("/api/v1/jobs/dag", json=payload)
+    assert response.status_code == 201
+    jobs = response.json()["jobs"]
+    assert len(jobs) == 2
+    child = next(j for j in jobs if j["name"] == "Child")
+    root = next(j for j in jobs if j["name"] == "Root")
+    assert root["id"] in child["dependencies"]
+
+
+def test_cancel_job(api_client):
+    create_res = api_client.post(
+        "/api/v1/jobs/",
+        json={"name": "Cancel Me", "estimated_duration": 1},
+    )
+    job_id = create_res.json()["id"]
+    cancel_res = api_client.post(f"/api/v1/jobs/{job_id}/cancel")
+    assert cancel_res.status_code == 200
+    assert cancel_res.json()["status"] == "CANCELLED"

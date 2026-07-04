@@ -1,6 +1,5 @@
 from pydantic_settings import BaseSettings
 
-
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Autonomous AI Job Orchestrator"
     API_V1_STR: str = "/api/v1"
@@ -22,6 +21,21 @@ class Settings(BaseSettings):
     JOB_STREAM_GROUP: str = "workers"
     JOB_STREAM_BLOCK_MS: int = 5000
     JOB_STREAM_MAXLEN: int = 10000
+    JOB_STREAM_CLAIM_MIN_IDLE_MS: int = 60000
+    RECLAIM_EVERY_N_LOOPS: int = 5
+
+    JOB_DLQ_STREAM_KEY: str = "stream:jobs:dlq"
+    JOB_DLQ_MAXLEN: int = 10000
+
+    LEASE_KEY_PREFIX: str = "lease:job:"
+    LEASE_TTL_SECONDS: int = 30
+    LEASE_HEARTBEAT_SECONDS: int = 10
+
+    MAX_JOB_RETRIES: int = 3
+    RETRY_BACKOFF_BASE_SECONDS: float = 2.0
+    RETRY_BACKOFF_MAX_SECONDS: float = 300.0
+
+    MAX_RUN_OUTPUT_CHARS: int = 65536
 
     @property
     def executor_allowlist(self) -> set[str]:

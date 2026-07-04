@@ -1,7 +1,5 @@
 import asyncio
-import traceback
 from typing import List
-from datetime import datetime
 
 from src.core.config import settings
 from src.core.logging_config import get_logger, setup_logging
@@ -41,30 +39,14 @@ class Scheduler:
 
     async def run(self):
         """Main loop of the scheduler with heuristic or AI decision making."""
-        JOB_TIMEOUT_SECONDS = 30.0
         self.is_running = True
         logger.info("Scheduler started (mode=%s)", self.mode)
 
         while self.is_running:
             try:
-                all_jobs = job_manager.list_jobs()
+                all_jobs, _ = job_manager.list_jobs(limit=10_000)
                 pending_jobs = [j for j in all_jobs if j.status == JobStatus.PENDING]
                 runnable_jobs = [j for j in pending_jobs if job_manager.are_dependencies_met(j)]
-
-                running_jobs = [j for j in all_jobs if j.status == JobStatus.RUNNING]
-                now = datetime.utcnow()
-
-                for job in running_jobs:
-                    if job.started_at:
-                        runtime = (now - job.started_at).total_seconds()
-                        if runtime > JOB_TIMEOUT_SECONDS:
-                            logger.warning(
-                                "Job %s (%s) timed out after %.2fs; marking FAILED",
-                                job.name,
-                                job.id,
-                                runtime,
-                            )
-                            job_manager.update_job_status(job.id, JobStatus.FAILED)
 
                 if runnable_jobs:
                     if self.mode == "ai":
