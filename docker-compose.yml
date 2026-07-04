@@ -22,6 +22,10 @@
   RETRY_BACKOFF_BASE_SECONDS: 2.0
   RETRY_BACKOFF_MAX_SECONDS: 300.0
   MAX_RUN_OUTPUT_CHARS: 65536
+  LOG_STORAGE_ROOT: /app/data/logs
+  LOG_SPILL_THRESHOLD_CHARS: 4096
+  LOG_INLINE_PREVIEW_CHARS: 2048
+  API_URL: http://api:8000
 
 services:
   redis:
@@ -55,6 +59,15 @@ services:
     depends_on:
       - redis
       - postgres
+    volumes:
+      - .:/app
+      - log_data:/app/data/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   worker:
     build: .
@@ -67,6 +80,9 @@ services:
       - redis
       - postgres
       - api
+    volumes:
+      - .:/app
+      - log_data:/app/data/logs
 
   dashboard:
     build: .
@@ -80,6 +96,9 @@ services:
     depends_on:
       - redis
       - postgres
+    volumes:
+      - .:/app
+      - log_data:/app/data/logs
 
   # --- Prod profile: immutable image, no bind mounts ---
   api-prod:
@@ -123,3 +142,4 @@ services:
 volumes:
   redis_data:
   postgres_data:
+  log_data:

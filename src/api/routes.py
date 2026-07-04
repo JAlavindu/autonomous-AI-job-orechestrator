@@ -5,12 +5,14 @@ from src.core.logging_config import get_logger
 from src.models.job import (
     DagSubmit,
     DagSubmitResponse,
+    DlqListResponse,
     Job,
     JobCreate,
     JobListResponse,
     JobStatus,
     Run,
     RunListResponse,
+    RunLogsResponse,
 )
 from src.orchestrator.job_manager import job_manager
 
@@ -98,3 +100,21 @@ def get_run(job_id: str, run_id: str):
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
     return run
+
+
+@router.get("/jobs/{job_id}/runs/{run_id}/logs", response_model=RunLogsResponse)
+def get_run_logs(
+    job_id: str,
+    run_id: str,
+    full: bool = Query(default=False, description="Load full spilled logs from object storage"),
+):
+    logs = job_manager.get_run_logs(job_id, run_id, full=full)
+    if not logs:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return RunLogsResponse(**logs)
+
+
+@router.get("/dlq", response_model=DlqListResponse)
+def list_dlq(limit: int = Query(default=100, ge=1, le=1000)):
+    items = job_manager.list_dlq(limit=limit)
+    return DlqListResponse(items=items, total=len(items))

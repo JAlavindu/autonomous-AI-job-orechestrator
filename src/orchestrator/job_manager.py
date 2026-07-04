@@ -14,6 +14,7 @@ from src.db.redis_store import redis_client
 from src.db.stream_queue import job_stream
 from src.models.job import DagJobCreate, Job, JobCreate, JobStatus, Run
 from src.orchestrator.executors.base import ExecutionResult
+from src.storage.run_logs import load_full_run_logs, persist_run_output
 
 
 class JobManager:
@@ -90,6 +91,7 @@ class JobManager:
             stdout=row.stdout,
             stderr=row.stderr,
             metrics=row.metrics,
+            log_ref=row.log_ref if row.log_ref else None,
         )
 
     def _retry_backoff_seconds(self, retry_count: int) -> float:
@@ -148,7 +150,10 @@ class JobManager:
                 )
                 db.commit()
                 db.refresh(row)
-                return self._to_model(db, row)
+                created = self._to_model(db, row)
+                if job_create.enqueue and self.are_dependencies_met(created):
+                    self.enqueue_job(created.id)
+                return created
             except IntegrityError:
                 db.rollback()
                 if job.idempotency_key:
@@ -398,19 +403,27 @@ class JobManager:
                 db.rollback()
                 raise
 
-    def finish_run(self, run_id: str, status: JobStatus, result: ExecutionResult) -> None:
+        def finish_run(self, run_id: str, status: JobStatus, result: ExecutionResult) -> None:
         with self.session_factory() as db:
             try:
                 run = db.get(RunRow, run_id)
                 if not run:
                     return
 
+                persisted = persist_run_output(
+                    run_id=run_id,
+                    stdout=result.stdout,
+                    stderr=result.stderr,
+                    error=result.error_message,
+                )
+
                 run.status = status.value if isinstance(status, JobStatus) else status
                 run.finished_at = datetime.utcnow()
                 run.exit_code = result.exit_code
-                run.error = truncate_output(result.error_message)
-                run.stdout = truncate_output(result.stdout)
-                run.stderr = truncate_output(result.stderr)
+                run.error = persisted.error
+                run.stdout = persisted.stdout
+                run.stderr = persisted.stderr
+                run.log_ref = persisted.log_ref
                 run.metrics = {"duration_seconds": result.duration_seconds}
                 self._audit(
                     db,
@@ -421,6 +434,7 @@ class JobManager:
                         "attempt": run.attempt,
                         "status": run.status,
                         "exit_code": run.exit_code,
+                        "log_ref": run.log_ref,
                     },
                 )
                 db.commit()
@@ -470,6 +484,33 @@ class JobManager:
 
     def enqueue_job(self, job_id: str) -> str:
         return job_stream.enqueue(job_id)
+    
+        def get_run_logs(self, job_id: str, run_id: str, full: bool = False) -> Optional[dict]:
+        with self.session_factory() as db:
+            row = db.get(RunRow, run_id)
+            if not row or row.job_id != job_id:
+                return None
+
+            if not full:
+                return {
+                    "run_id": row.id,
+                    "job_id": row.job_id,
+                    "stdout": row.stdout,
+                    "stderr": row.stderr,
+                    "error": row.error,
+                    "stdout_ref": None,
+                    "stderr_ref": None,
+                    "error_ref": None,
+                    "spilled": bool(row.log_ref),
+                }
+
+            merged = load_full_run_logs(row.log_ref, row.stdout, row.stderr, row.error)
+            merged["run_id"] = row.id
+            merged["job_id"] = row.job_id
+            return merged
+
+    def list_dlq(self, limit: int = 100) -> list[dict]:
+        return job_stream.list_dlq(count=limit)
 
 
 job_manager = JobManager()

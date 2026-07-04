@@ -106,7 +106,7 @@ def test_create_dag(manager):
     assert parent.id in child.dependencies
 
 
-def test_finish_run_truncates_output(manager):
+def test_finish_run_truncates_or_spills_output(manager):
     job = manager.create_job(JobCreate(name="big-output", estimated_duration=1))
     run = manager.start_run(job.id, "worker-a")
     huge = "x" * 100_000
@@ -116,8 +116,8 @@ def test_finish_run_truncates_output(manager):
         ExecutionResult(success=True, exit_code=0, stdout=huge),
     )
     runs, _ = manager.get_runs(job.id)
-    assert "truncated" in runs[0].stdout
-    assert len(runs[0].stdout) < len(huge)
+    assert runs[0].log_ref is not None
+    assert "truncated" in (runs[0].stdout or "")
 
 
 def test_list_jobs_filter_and_count(manager):

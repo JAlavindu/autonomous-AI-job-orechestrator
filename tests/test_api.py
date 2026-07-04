@@ -9,6 +9,8 @@ import src.db.models  # noqa: F401
 from src.db.base import Base
 from src.main import app
 from src.orchestrator.job_manager import JobManager
+from src.models.job import JobStatus
+from src.orchestrator.executors.base import ExecutionResult
 
 
 @pytest.fixture
@@ -124,3 +126,34 @@ def test_cancel_job(api_client):
     cancel_res = api_client.post(f"/api/v1/jobs/{job_id}/cancel")
     assert cancel_res.status_code == 200
     assert cancel_res.json()["status"] == "CANCELLED"
+
+def test_get_run_logs_preview(api_client):
+    create_res = api_client.post(
+        "/api/v1/jobs/",
+        json={"name": "Log Job", "estimated_duration": 1},
+    )
+    job_id = create_res.json()["id"]
+
+    from src.api import routes
+
+    manager = routes.job_manager
+    run = manager.start_run(job_id, "worker-a")
+    manager.finish_run(
+        run.id,
+        JobStatus.COMPLETED,
+        ExecutionResult(success=True, exit_code=0, stdout="hello"),
+    )
+
+    response = api_client.get(f"/api/v1/jobs/{job_id}/runs/{run.id}/logs")
+    assert response.status_code == 200
+    assert response.json()["stdout"] == "hello"
+
+
+def test_list_dlq(api_client, monkeypatch):
+    monkeypatch.setattr(
+        "src.orchestrator.job_manager.job_stream.list_dlq",
+        lambda count=100: [{"message_id": "1-0", "job_id": "abc", "reason": "boom"}],
+    )
+    response = api_client.get("/api/v1/dlq")
+    assert response.status_code == 200
+    assert response.json()["total"] == 1

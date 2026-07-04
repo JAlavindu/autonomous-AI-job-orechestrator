@@ -1,95 +1,94 @@
-import streamlit as st
-import pandas as pd
-import redis
 import json
-import time
 import os
-from datetime import datetime
+import time
 
-# [FIX] Read from Environment Variable, default to localhost
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+import pandas as pd
+import requests
+import streamlit as st
 
-# Connect to Redis directly to fetch data
-r = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=0, decode_responses=True)
+API_URL = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
+JOBS_URL = f"{API_URL}/api/v1/jobs/"
+DLQ_URL = f"{API_URL}/api/v1/dlq"
 
 st.set_page_config(page_title="AI Orchestrator Monitor", layout="wide")
-st.title("🤖 Autonomous AI Job Orchestrator Dashboard")
+st.title("Autonomous AI Job Orchestrator Dashboard")
 
-# --- ADDED: Benchmark Results Sidebar ---
-st.sidebar.header("📊 Benchmark Results")
-st.sidebar.markdown("Offline evaluation comparing **100 identical randomized jobs** across different schedulers:")
-
-benchmark_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "benchmark_results.json")
+st.sidebar.header("Benchmark Results")
+benchmark_file = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "benchmark_results.json",
+)
 if os.path.exists(benchmark_file):
-    with open(benchmark_file, "r") as f:
+    with open(benchmark_file, "r", encoding="utf-8") as f:
         data = json.load(f)
-    benchmark_data = pd.DataFrame({
-        "Scheduler": list(data.keys()),
-        "Missed Deadlines": list(data.values())
-    }).set_index("Scheduler")
+    benchmark_data = pd.DataFrame(
+        {"Scheduler": list(data.keys()), "Missed Deadlines": list(data.values())}
+    ).set_index("Scheduler")
 else:
-    # Fallback to defaults if the benchmark hasn't been run yet
-    benchmark_data = pd.DataFrame({
-        "Scheduler": ["AI (DQN)", "FIFO", "Strict Priority"],
-        "Missed Deadlines": [39, 42, 49]
-    }).set_index("Scheduler")
+    benchmark_data = pd.DataFrame(
+        {
+            "Scheduler": ["AI (DQN)", "FIFO", "Strict Priority"],
+            "Missed Deadlines": [39, 42, 49],
+        }
+    ).set_index("Scheduler")
 
-# Streamlit native bar chart
 st.sidebar.bar_chart(benchmark_data)
-st.sidebar.caption("🏆 **AI Wins:** Lowest missed deadline rate. Effectively balances urgency and prevents low-priority starvation.")
 st.sidebar.divider()
 
-
-# Auto-refresh every 2 seconds
-if st.button('Refresh Data'):
+if st.button("Refresh Data"):
     st.rerun()
 
-# 1. Fetch Data
 try:
-    job_ids = r.smembers("jobs:index")
-    jobs = []
-    if job_ids:
-        raw_data = r.mget([f"job:{jid}" for jid in job_ids])
-        jobs = [json.loads(d) for d in raw_data if d]
-    
-    df = pd.DataFrame(jobs)
-except Exception as e:
-    st.error(f"Could not connect to Redis: {e}")
+    jobs_resp = requests.get(JOBS_URL, params={"limit": 1000}, timeout=5)
+    jobs_resp.raise_for_status()
+    jobs = jobs_resp.json().get("items", [])
+
+    dlq_resp = requests.get(DLQ_URL, params={"limit": 100}, timeout=5)
+    dlq_resp.raise_for_status()
+    dlq_items = dlq_resp.json().get("items", [])
+except Exception as exc:
+    st.error(f"Could not reach API at {API_URL}: {exc}")
     st.stop()
 
+df = pd.DataFrame(jobs) if jobs else pd.DataFrame()
+
 if not df.empty:
-    # Convert timestamps
-    df['created_at'] = pd.to_datetime(df['created_at'])
-    if 'completed_at' in df.columns:
-        df['completed_at'] = pd.to_datetime(df['completed_at'])
+    if "created_at" in df.columns:
+        df["created_at"] = pd.to_datetime(df["created_at"])
+    if "completed_at" in df.columns:
+        df["completed_at"] = pd.to_datetime(df["completed_at"])
 
-    # 2. Metrics Row
-    col1, col2, col3, col4 = st.columns(4)
-    
-    pending_count = len(df[df['status'] == 'PENDING'])
-    completed_count = len(df[df['status'] == 'COMPLETED'])
-    running_count = len(df[df['status'] == 'RUNNING'])
-    failed_count = len(df[df['status'] == 'FAILED'])
+    col1, col2, col3, col4, col5 = st.columns(5)
+    col1.metric("Pending", len(df[df["status"] == "PENDING"]))
+    col2.metric("Running", len(df[df["status"] == "RUNNING"]))
+    col3.metric("Completed", len(df[df["status"] == "COMPLETED"]))
+    col4.metric("Failed", len(df[df["status"] == "FAILED"]))
+    col5.metric("DLQ", len(dlq_items))
 
-    col1.metric("Pending Jobs", pending_count)
-    col2.metric("Running Jobs", running_count)
-    col3.metric("Completed Jobs", completed_count)
-    col4.metric("Failed Jobs", failed_count)
+    st.subheader("Active Job Queue")
+    active_df = df[df["status"].isin(["PENDING", "RUNNING", "RETRYING"])].sort_values(
+        by="priority", ascending=False
+    )
+    if not active_df.empty:
+        st.dataframe(
+            active_df[["id", "name", "status", "priority", "estimated_duration", "created_at"]],
+            use_container_width=True,
+        )
+    else:
+        st.info("No active jobs.")
 
-    # 3. Active Queue (Detailed View)
-    st.subheader("📋 Active Job Queue")
-    active_df = df[df['status'].isin(['PENDING', 'RUNNING'])].sort_values(by='priority', ascending=False)
-    st.dataframe(active_df[['id', 'name', 'status', 'priority', 'estimated_duration', 'created_at']], use_container_width=True)
-
-    # 4. Success History
-    st.subheader("📈 Completed Jobs History")
-    completed_df = df[df['status'] == 'COMPLETED'].sort_values(by='completed_at', ascending=False)
+    st.subheader("Completed Jobs History")
+    completed_df = df[df["status"] == "COMPLETED"].sort_values(by="completed_at", ascending=False)
     if not completed_df.empty:
-        st.dataframe(completed_df[['name', 'priority', 'created_at', 'completed_at']])
-else:
-    st.info("No jobs found in the system.")
+        st.dataframe(completed_df[["name", "priority", "created_at", "completed_at"]])
 
-# Footer auto-refresh hint
+    st.subheader("Dead Letter Queue")
+    if dlq_items:
+        st.dataframe(pd.DataFrame(dlq_items), use_container_width=True)
+    else:
+        st.info("DLQ is empty.")
+else:
+    st.info("No jobs found.")
+
 time.sleep(2)
 st.rerun()

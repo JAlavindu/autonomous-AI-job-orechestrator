@@ -30,6 +30,10 @@ class JobCreate(JobBase):
         max_length=255,
         description="Optional idempotency key; duplicate submits return the existing job",
     )
+    enqueue: bool = Field(
+        default=False,
+        description="Enqueue immediately when dependencies are already satisfied",
+    )
 
 
 class Job(JobBase):
@@ -66,6 +70,7 @@ class Run(BaseModel):
     stdout: Optional[str] = None
     stderr: Optional[str] = None
     metrics: Optional[Dict[str, Any]] = None
+    log_ref: Optional[str] = None
 
 
 class RunListResponse(BaseModel):
@@ -90,3 +95,26 @@ class DagSubmit(BaseModel):
 
 class DagSubmitResponse(BaseModel):
     jobs: List[Job]
+
+class RunLogsResponse(BaseModel):
+    run_id: str
+    job_id: str
+    stdout: Optional[str] = None
+    stderr: Optional[str] = None
+    error: Optional[str] = None
+    stdout_ref: Optional[str] = None
+    stderr_ref: Optional[str] = None
+    error_ref: Optional[str] = None
+    spilled: bool = False
+
+
+class DlqEntry(BaseModel):
+    message_id: str
+    job_id: Optional[str] = None
+    reason: Optional[str] = None
+    source_message_id: Optional[str] = None
+
+
+class DlqListResponse(BaseModel):
+    items: List[DlqEntry]
+    total: int

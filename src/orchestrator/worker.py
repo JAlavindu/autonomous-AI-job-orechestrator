@@ -66,6 +66,9 @@ def _process_message(message: StreamMessage, worker_id: str, reclaimed: bool = F
     try:
         logger.info("[%s] Processing job: %s", worker_id, job.name)
         job_manager.update_job_status(job_id, JobStatus.RUNNING, worker_id=worker_id)
+        if job.status in {JobStatus.COMPLETED, JobStatus.FAILED}:
+            job_stream.ack(message.message_id)
+            return
         run = job_manager.start_run(job_id, worker_id)
         if not run:
             logger.error("[%s] Could not start run for job %s", worker_id, job_id)

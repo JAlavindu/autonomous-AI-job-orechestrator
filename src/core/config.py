@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Autonomous AI Job Orchestrator"
     API_V1_STR: str = "/api/v1"
@@ -36,6 +37,11 @@ class Settings(BaseSettings):
     RETRY_BACKOFF_MAX_SECONDS: float = 300.0
 
     MAX_RUN_OUTPUT_CHARS: int = 65536
+    LOG_STORAGE_ROOT: str = "data/logs"
+    LOG_SPILL_THRESHOLD_CHARS: int = 4096
+    LOG_INLINE_PREVIEW_CHARS: int = 2048
+
+    API_URL: str = "http://localhost:8000"
 
     @property
     def executor_allowlist(self) -> set[str]:
