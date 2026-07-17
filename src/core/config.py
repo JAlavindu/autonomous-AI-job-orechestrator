@@ -14,6 +14,13 @@ class Settings(BaseSettings):
     SCHEDULER_MODE: str = "heuristic"
     LOG_LEVEL: str = "INFO"
 
+    # --- Phase 3 isolated runner ---
+    RUNNER: str = "subprocess"  # subprocess | docker (future)
+    DEFAULT_JOB_TIMEOUT_SECONDS: float = 300.0
+    JOB_TIMEOUT_GRACE_SECONDS: float = 5.0
+    DEFAULT_JOB_MEMORY_MB: int = 0  # 0 = unlimited
+    DEFAULT_JOB_CPU_SECONDS: float = 0  # 0 = unlimited
+
     DATABASE_URL: str = "postgresql+psycopg2://orchestrator:orchestrator@localhost:5432/orchestrator"
     DEFAULT_TENANT_ID: str = "00000000-0000-0000-0000-000000000001"
     DEFAULT_TENANT_NAME: str = "default"
@@ -74,6 +81,22 @@ class Settings(BaseSettings):
     VAULT_MOUNT: str = "secret"
     VAULT_PATH: str = "orchestrator"
 
+    def validate_secrets_for_environment(self) -> None:
+        if self.ENVIRONMENT != "production":
+            return
+        insecure = []
+        if self.API_KEY_PEPPER == "change-me-in-production":
+            insecure.append("API_KEY_PEPPER")
+        if self.JWT_SECRET_KEY in ("", "dev-only-change-me", "change-me-in-production"):
+            insecure.append("JWT_SECRET_KEY")
+        if self.AUTH_BOOTSTRAP_OPERATOR_KEY.strip():
+            insecure.append("AUTH_BOOTSTRAP_OPERATOR_KEY (must be empty in production)")
+        if insecure:
+            raise RuntimeError(
+                "Refusing to start in production with insecure configuration: "
+                + ", ".join(insecure)
+            )
+    
     @property
     def executor_allowlist(self) -> set[str]:
         return {e.strip() for e in self.EXECUTOR_ALLOWLIST.split(",") if e.strip()}

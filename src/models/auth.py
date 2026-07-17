@@ -57,7 +57,7 @@ class ApiKeyListResponse(BaseModel):
     total: int
 
 class Principal(BaseModel):
-    subject_id: str  # rename conceptually from api_key_id
+    subject_id: str 
     tenant_id: str
     role: Role
     name: str
@@ -66,6 +66,7 @@ class Principal(BaseModel):
     def api_key_id(self) -> str:
         """Backward-compatible alias used in existing code."""
         return self.subject_id
+        
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"

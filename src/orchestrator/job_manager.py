@@ -11,7 +11,7 @@ from src.core.output import truncate_output
 from src.db.models import AuditLogRow, DependencyRow, JobRow, RunRow, TenantRow
 from src.db.session import SessionLocal
 from src.db.stream_queue import job_stream
-from src.models.job import DagJobCreate, Job, JobCreate, JobStatus, Run
+from src.models.job import DagJobCreate, Job, JobCreate, JobStatus, ResourceReq, Run
 from src.orchestrator.executors.base import ExecutionResult
 from src.storage.run_logs import load_full_run_logs, persist_run_output
 from src.tenancy.exceptions import QuotaExceededError
@@ -71,6 +71,7 @@ class JobManager:
             estimated_duration=row.est_duration,
             dependencies=self._dependencies_for_job(db, row.id),
             payload=row.payload or {},
+            resource_req=ResourceReq(**row.resource_req) if row.resource_req else None,
             status=JobStatus(row.status),
             created_at=row.created_at,
             started_at=row.started_at,
@@ -142,6 +143,7 @@ class JobManager:
                     est_duration=job.estimated_duration,
                     status=job.status.value if isinstance(job.status, JobStatus) else job.status,
                     payload=job.payload,
+                    resource_req=job.resource_req.model_dump(exclude_none=True) if job.resource_req else None,
                     idempotency_key=job.idempotency_key,
                     retry_count=job.retry_count,
                     worker_id=job.worker_id,
@@ -226,6 +228,7 @@ class JobManager:
                         est_duration=node.estimated_duration,
                         status=JobStatus.PENDING.value,
                         payload=node.payload or {},
+                        resource_req=node.resource_req.model_dump(exclude_none=True) if node.resource_req else None,
                         retry_count=0,
                     )
                     db.add(row)

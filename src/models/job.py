@@ -18,6 +18,19 @@ class JobStatus(str, Enum):
     CANCELLED = "CANCELLED"
 
 
+class ResourceReq(BaseModel):
+    """Per-job resource requests/limits enforced by the isolated runner.
+
+    All fields optional; unset fields fall back to the runner's configured defaults.
+    cpu_seconds / memory_mb are best-effort (enforced via setrlimit on Unix, skipped on Windows);
+    timeout_seconds is a cross-platform hard wall-clock limit.
+    """
+
+    cpu_seconds: Optional[float] = Field(default=None, gt=0, description="Max CPU seconds (Unix best-effort)")
+    memory_mb: Optional[int] = Field(default=None, gt=0, description="Max resident memory in MB (Unix best-effort)")
+    timeout_seconds: Optional[float] = Field(default=None, gt=0, description="Hard wall-clock timeout in seconds")
+
+
 class JobBase(BaseModel):
     name: str = Field(..., description="Name of the job")
     description: Optional[str] = None
@@ -26,6 +39,7 @@ class JobBase(BaseModel):
     estimated_duration: float = Field(..., description="Estimated duration in seconds")
     dependencies: List[str] = Field(default_factory=list, description="List of Job IDs this job depends on")
     payload: Dict[str, Any] = Field(default_factory=dict, description="Arguments for the job execution")
+    resource_req: Optional[ResourceReq] = Field(default=None, description="Per-job resource requests/limits")
 
     @field_validator("dependencies")
     @classmethod
@@ -105,6 +119,7 @@ class DagJobCreate(BaseModel):
     deadline: Optional[datetime] = None
     estimated_duration: float
     payload: Dict[str, Any] = Field(default_factory=dict)
+    resource_req: Optional[ResourceReq] = Field(default=None, description="Per-job resource requests/limits")
     depends_on: List[str] = Field(default_factory=list, description="Keys of upstream jobs in this DAG")
 
 
