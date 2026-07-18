@@ -58,6 +58,7 @@ def api_client(monkeypatch):
 
     client = TestClient(app)
     client.operator_headers = {"X-API-Key": operator_key}
+    client.session_factory = TestingSession
     client.viewer_headers = {"X-API-Key": viewer_key}
 
     try:

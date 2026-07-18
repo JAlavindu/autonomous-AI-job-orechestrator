@@ -12,6 +12,7 @@ from src.core.config import settings
 from src.core.logging_config import get_logger
 from src.db.models import ApiKeyRow, TenantRow
 from src.db.session import SessionLocal
+from src.db.audit import add_audit
 from src.models.auth import Principal, Role
 
 logger = get_logger(__name__)
@@ -35,6 +36,7 @@ class ApiKeyService:
         name: str,
         role: Role,
         tenant_id: str | None = None,
+        actor: str = "system",
     ) -> tuple[ApiKeyRow, str]:
         raw_key = generate_api_key()
         hashed = hash_api_key(raw_key, settings.API_KEY_PEPPER)
@@ -51,9 +53,18 @@ class ApiKeyService:
                 enabled=True,
             )
             db.add(row)
+            add_audit(
+                db,
+                tenant_id=row.tenant_id,
+                action="api_key.create",
+                target=f"api_key:{row.id}",
+                payload={"name": name, "role": role.value, "key_prefix": row.key_prefix},
+                actor=actor,
+            )
             db.commit()
             db.refresh(row)
             return row, raw_key
+
 
     def import_key(
         self,
@@ -61,6 +72,7 @@ class ApiKeyService:
         name: str,
         role: Role,
         tenant_id: str | None = None,
+        actor: str = "system",
     ) -> ApiKeyRow:
         """Store a known raw key (e.g. bootstrap from env)."""
         hashed = hash_api_key(raw_key, settings.API_KEY_PEPPER)
@@ -77,9 +89,18 @@ class ApiKeyService:
                 enabled=True,
             )
             db.add(row)
+            add_audit(
+                db,
+                tenant_id=row.tenant_id,
+                action="api_key.import",
+                target=f"api_key:{row.id}",
+                payload={"name": name, "role": role.value, "key_prefix": row.key_prefix},
+                actor=actor,
+            )
             db.commit()
             db.refresh(row)
             return row
+
 
     def validate_key(self, raw_key: str) -> Optional[Principal]:
         if not raw_key:
@@ -114,7 +135,7 @@ class ApiKeyService:
                 stmt = stmt.where(ApiKeyRow.tenant_id == tenant_id)
             return list(db.scalars(stmt).all())
 
-    def revoke_key(self, key_id: str, tenant_id: str | None = None) -> bool:
+    def revoke_key(self, key_id: str, tenant_id: str | None = None, actor: str = "system") -> bool:
         with self.session_factory() as db:
             row = db.get(ApiKeyRow, key_id)
             if not row:
@@ -122,8 +143,17 @@ class ApiKeyService:
             if tenant_id and row.tenant_id != tenant_id:
                 return False
             row.enabled = False
+            add_audit(
+                db,
+                tenant_id=row.tenant_id,
+                action="api_key.revoke",
+                target=f"api_key:{key_id}",
+                payload={"name": row.name, "key_prefix": row.key_prefix},
+                actor=actor,
+            )
             db.commit()
             return True
+
 
     def bootstrap_if_empty(self) -> str | None:
         raw = settings.AUTH_BOOTSTRAP_OPERATOR_KEY.strip()

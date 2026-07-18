@@ -33,11 +33,11 @@ docker-compose --profile prod up --build     # immutable-image prod profile (no 
 
 Tests:
 ```bash
-python -m pytest                 # full suite (65 tests, ~90s; uses sqlite in-memory via tests/conftest.py)
+python -m pytest                 # full suite (69 tests, ~90s; uses sqlite in-memory via tests/conftest.py)
 python -m pytest tests/test_worker.py -q
 python -m pytest tests/test_worker.py::test_failed_job_is_not_overwritten_as_completed
 ```
-Tests need no infrastructure: `api_client` in `tests/conftest.py` swaps in an in-memory SQLite session factory and a fresh `JobManager`/`ApiKeyService`. Infra-dependent tests **auto-skip** when their backend is unreachable: `test_db_schema.py` (needs Postgres at `DATABASE_URL`), `test_stream_queue.py` (needs Redis at `REDIS_HOST`/`REDIS_PORT`), and the memory-limit test in `test_subprocess_runner.py` (needs Unix `setrlimit`; always skips on Windows). A green run on a bare Windows machine is 60 passed / 5 skipped — those skips are unverified surface, not passing tests. `test_subprocess_runner.py` spawns real child interpreters, so it is slower than the rest.
+Tests need no infrastructure: `api_client` in `tests/conftest.py` swaps in an in-memory SQLite session factory and a fresh `JobManager`/`ApiKeyService`. Infra-dependent tests **auto-skip** when their backend is unreachable: `test_db_schema.py` (needs Postgres at `DATABASE_URL`), `test_stream_queue.py` (needs Redis at `REDIS_HOST`/`REDIS_PORT`), and the memory-limit test in `test_subprocess_runner.py` (needs Unix `setrlimit`; always skips on Windows). A green run on a bare Windows machine is 64 passed / 5 skipped — those skips are unverified surface, not passing tests. `test_subprocess_runner.py` spawns real child interpreters, so it is slower than the rest.
 
 DB migrations:
 ```bash
@@ -87,14 +87,13 @@ Executors (`src/orchestrator/executors/`) are dispatched by `payload["type"]` ag
 - Two credential types: long-lived API keys (`src/auth/service.py`, header `X-API-Key` or `Authorization: Bearer`) and OAuth2 client-credentials for service accounts — `POST /api/v1/auth/token` (`src/api/auth_routes.py`, deliberately unauthenticated, JSON body not form-encoded) exchanges a `client_id`/`client_secret` (created via `/admin/service-accounts`, operator-only) for a short-lived JWT (`src/auth/jwt_service.py`, TTL `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`). `get_current_principal` (`src/auth/deps.py`) tries JWT decode **first** (cheap, no DB hit), then falls back to API-key lookup — both arrive as `Bearer` credentials and the two spaces can't collide. `JWT_ENABLED=false` is the kill switch for both issuing and accepting tokens. Both credential types resolve to a `Principal` (`src/models/auth.py`) with `subject_id`, `tenant_id`, a `Role`, and `auth_method`; `principal.api_key_id` is a read-only backward-compat alias for `subject_id`. Always construct with `subject_id=` — pydantic silently ignores unknown kwargs, so passing a wrong field name fails at request time, not import time (this exact bug once broke all API-key auth).
 - Roles are ranked (`ROLE_RANK`): `viewer < producer < operator`. Routes declare a minimum role via `Depends(require_min_role(Role.X))` (see `src/auth/deps.py`); `AUTH_ENABLED=false` bypasses this entirely and treats every request as an operator on the default tenant — used implicitly by some scripts, be careful when reasoning about "is this endpoint protected" without checking the setting.
 - Every `job_manager`/`tenant_policy` query is scoped by `tenant_id`; cross-tenant reads return 404, not 403 (see `test_tenant_isolation.py`) — preserve that pattern in new endpoints rather than leaking existence via a 403.
+- All state-changing operations write `audit_log` entries **inside the same transaction** as the mutation: job transitions via `job_manager._audit`, admin credential operations (API-key/service-account create/import/revoke) via the shared `add_audit` helper in `src/db/audit.py` — use `add_audit` for new call sites, never commit inside it, and never put secrets in the payload (name/role/key_prefix/client_id only). Routes pass `actor=f"api:{principal.name}"`; service defaults attribute non-interactive calls to `"system"`. Failed operations (e.g. cross-tenant revoke probes) write nothing.
 - Rate limiting (`src/tenancy/rate_limit.py`) and request-size limiting (`src/tenancy/middleware.py`) are tenant/request-level guards independent of RBAC.
 - `settings.validate_secrets_for_environment()` (`src/core/config.py`) is called at API startup and refuses to boot with default/dev secrets when `ENVIRONMENT=production`.
 
 ### Known rough edges (don't be surprised)
 - `POST /auth/token` has no rate limiting (tenant rate limits apply only *after* auth resolves) — a credential brute-force surface to harden before real exposure.
 - JWT revocation is TTL-bound: revoking a service account stops new token issuance, but already-issued JWTs stay valid until they expire (60 min default) — there is no token denylist.
-- Admin operations (API-key and service-account create/revoke) do not write `audit_log` entries; only job state changes are audited.
-- `src/rl_engine/reward.py` is an empty dead file — nothing imports it; the real reward lives in `environment.py`.
 - `datetime.utcnow()` is used throughout (`job_manager`, `auth/service`) and emits deprecation warnings on Python 3.12+; prefer `datetime.now(timezone.utc)` in new code.
 - On Windows, the runner's memory/CPU limits are silent no-ops — only the wall-clock timeout protects the worker. The `setrlimit` path has only ever been exercised on Linux.
 

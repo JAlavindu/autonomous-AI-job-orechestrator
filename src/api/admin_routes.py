@@ -34,7 +34,9 @@ def create_api_key(
         name=body.name,
         role=body.role,
         tenant_id=principal.tenant_id,
+        actor=f"api:{principal.name}",
     )
+
     logger.info("Created API key %s (%s) for tenant %s", row.name, row.id, row.tenant_id)
     return ApiKeyCreatedResponse(
         id=row.id,
@@ -73,7 +75,10 @@ def revoke_api_key(
     key_id: str,
     principal: Principal = Depends(require_min_role(Role.OPERATOR)),
 ):
-    revoked = api_key_service.revoke_key(key_id, tenant_id=principal.tenant_id)
+    revoked = api_key_service.revoke_key(
+        key_id, tenant_id=principal.tenant_id, actor=f"api:{principal.name}"
+    )
+
     if not revoked:
         raise HTTPException(status_code=404, detail="API key not found")
     logger.info("Revoked API key %s for tenant %s", key_id, principal.tenant_id)
@@ -92,6 +97,8 @@ def create_service_account(
         name=body.name,
         role=body.role,
         tenant_id=principal.tenant_id,
+        actor=f"api:{principal.name}",
+
     )
     logger.info(
         "Created service account %s (%s) for tenant %s", row.name, row.id, row.tenant_id
@@ -134,7 +141,7 @@ def revoke_service_account(
     account_id: str,
     principal: Principal = Depends(require_min_role(Role.OPERATOR)),
 ):
-    revoked = service_account_service.revoke(account_id, tenant_id=principal.tenant_id)
+    revoked = service_account_service.revoke(account_id, tenant_id=principal.tenant_id, actor=f"api:{principal.name}")
     if not revoked:
         raise HTTPException(status_code=404, detail="Service account not found")
     logger.info(

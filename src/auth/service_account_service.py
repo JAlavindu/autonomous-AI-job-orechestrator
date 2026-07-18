@@ -10,6 +10,7 @@ from src.auth.security import hash_api_key, key_prefix  # reuse HMAC-style hash 
 from src.core.config import settings
 from src.db.models import ServiceAccountRow, TenantRow
 from src.db.session import SessionLocal
+from src.db.audit import add_audit
 from src.models.auth import Principal, Role
 
 
@@ -18,7 +19,7 @@ class ServiceAccountService:
         self.session_factory = session_factory
 
     def create(
-        self, name: str, role: Role, tenant_id: str
+        self, name: str, role: Role, tenant_id: str, actor: str = "system"
     ) -> tuple[ServiceAccountRow, str]:
         client_id = f"sa_{secrets.token_urlsafe(12)}"
         client_secret = f"ssec_{secrets.token_urlsafe(32)}"
@@ -35,9 +36,18 @@ class ServiceAccountService:
                 enabled=True,
             )
             db.add(row)
+            add_audit(
+                db,
+                tenant_id=tenant_id,
+                action="service_account.create",
+                target=f"service_account:{row.id}",
+                payload={"name": name, "role": role.value, "client_id": client_id},
+                actor=actor,
+            )
             db.commit()
             db.refresh(row)
             return row, client_secret
+
 
     def validate_client_credentials(self, client_id: str, client_secret: str) -> Principal | None:
         if not client_id or not client_secret:
@@ -70,14 +80,23 @@ class ServiceAccountService:
             )
             return list(db.scalars(stmt).all())
 
-    def revoke(self, account_id: str, tenant_id: str) -> bool:
+    def revoke(self, account_id: str, tenant_id: str, actor: str = "system") -> bool:
         with self.session_factory() as db:
             row = db.get(ServiceAccountRow, account_id)
             if not row or row.tenant_id != tenant_id:
                 return False
             row.enabled = False
+            add_audit(
+                db,
+                tenant_id=row.tenant_id,
+                action="service_account.revoke",
+                target=f"service_account:{account_id}",
+                payload={"name": row.name, "client_id": row.client_id},
+                actor=actor,
+            )
             db.commit()
             return True
+
 
 
 service_account_service = ServiceAccountService()
