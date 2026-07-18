@@ -8,7 +8,8 @@ def test_shell_disabled_by_default(monkeypatch):
               payload={"type": "shell", "command": "echo pwned"})
     result = registry.execute_job(job)
     assert result.success is False
-    assert "disabled by policy" in result.error_message
+    assert "disabled by tenant policy" in result.error_message
+
 
 
 def test_shell_runs_when_allowlisted(monkeypatch):

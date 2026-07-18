@@ -24,10 +24,11 @@ def _extract_api_key(request: Request) -> str | None:
 def get_current_principal(request: Request) -> Principal:
     if not settings.AUTH_ENABLED:
         return Principal(
-            api_key_id="auth-disabled",
+            subject_id="auth-disabled",
             tenant_id=settings.DEFAULT_TENANT_ID,
             role=Role.OPERATOR,
             name="auth-disabled",
+            auth_method="api_key",
         )
 
     raw_key = _extract_api_key(request)

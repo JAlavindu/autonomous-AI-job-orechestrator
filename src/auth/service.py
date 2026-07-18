@@ -100,10 +100,11 @@ class ApiKeyService:
             db.commit()
 
             return Principal(
-                api_key_id=row.id,
+                subject_id=row.id,
                 tenant_id=row.tenant_id,
                 role=Role(row.role),
                 name=row.name,
+                auth_method="api_key",
             )
 
     def list_keys(self, tenant_id: str | None = None) -> list[ApiKeyRow]:

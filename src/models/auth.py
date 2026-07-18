@@ -18,13 +18,16 @@ ROLE_RANK = {
     Role.OPERATOR: 3,
 }
 
-
 class Principal(BaseModel):
-    api_key_id: str
+    subject_id: str 
     tenant_id: str
     role: Role
     name: str
-
+    auth_method: AuthMethod = "api_key"
+    @property
+    def api_key_id(self) -> str:
+        """Backward-compatible alias used in existing code."""
+        return self.subject_id
 
 class ApiKeyCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
@@ -55,17 +58,6 @@ class ApiKeySummary(BaseModel):
 class ApiKeyListResponse(BaseModel):
     items: list[ApiKeySummary]
     total: int
-
-class Principal(BaseModel):
-    subject_id: str 
-    tenant_id: str
-    role: Role
-    name: str
-    auth_method: AuthMethod = "api_key"
-    @property
-    def api_key_id(self) -> str:
-        """Backward-compatible alias used in existing code."""
-        return self.subject_id
         
 class TokenResponse(BaseModel):
     access_token: str

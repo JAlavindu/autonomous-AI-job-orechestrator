@@ -91,8 +91,8 @@ def test_failed_job_is_not_overwritten_as_completed(monkeypatch):
     fake_mgr = FakeJobManager(job)
     _patch_stream(monkeypatch, job.id, fake_mgr)
     monkeypatch.setattr(
-        worker,
-        "execute_job",
+        worker.runner,
+        "run",
         lambda j, executor_allowlist=None: ExecutionResult(
             success=False, exit_code=1, error_message="boom"
         ),
@@ -117,8 +117,8 @@ def test_worker_does_not_sleep_for_estimated_duration(monkeypatch):
 
     _patch_stream(monkeypatch, job.id, fake_mgr)
     monkeypatch.setattr(
-        worker,
-        "execute_job",
+        worker.runner,
+        "run",
         lambda j, executor_allowlist=None: ExecutionResult(success=True, exit_code=0, stdout="hi"),
     )
     monkeypatch.setattr(worker.time, "sleep", lambda s: sleep_calls.append(s))

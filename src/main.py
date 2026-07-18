@@ -39,22 +39,6 @@ async def lifespan(app: FastAPI):
     scheduler.stop()
     scheduler_task.cancel()
 
-def validate_secrets_for_environment(self) -> None:
-    if self.ENVIRONMENT != "production":
-        return
-    insecure = []
-    if self.API_KEY_PEPPER == "change-me-in-production":
-        insecure.append("API_KEY_PEPPER")
-    if self.JWT_SECRET_KEY in ("", "dev-only-change-me", "change-me-in-production"):
-        insecure.append("JWT_SECRET_KEY")
-    if self.AUTH_BOOTSTRAP_OPERATOR_KEY.strip():
-        insecure.append("AUTH_BOOTSTRAP_OPERATOR_KEY (must be empty in production)")
-    if insecure:
-        raise RuntimeError(
-            "Refusing to start in production with insecure configuration: "
-            + ", ".join(insecure)
-        )
-
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
