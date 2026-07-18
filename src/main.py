@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from src.api.admin_routes import router as admin_router
 from src.api.health import router as health_router
 from src.api.routes import router as api_router
+from src.api.auth_routes import router as auth_router
 from src.auth.service import api_key_service
 from src.core.config import settings
 from src.core.logging_config import RequestIdMiddleware, get_logger, setup_logging
@@ -51,7 +52,7 @@ app.add_middleware(RequestSizeLimitMiddleware)
 app.include_router(health_router)
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.include_router(admin_router, prefix=settings.API_V1_STR)
-
+app.include_router(auth_router, prefix=settings.API_V1_STR)
 
 @app.get("/")
 def root():

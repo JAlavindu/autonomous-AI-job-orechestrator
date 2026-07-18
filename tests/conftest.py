@@ -9,6 +9,8 @@ import src.api.routes as routes
 import src.auth.deps as auth_deps
 import src.tenancy.rate_limit as rate_limit_mod
 import src.db.models  # noqa: F401
+import src.api.auth_routes as auth_routes
+from src.auth.service_account_service import ServiceAccountService
 from src.auth.service import ApiKeyService
 from src.core import config
 from src.db.base import Base
@@ -48,6 +50,9 @@ def api_client(monkeypatch):
     key_service = ApiKeyService(session_factory=TestingSession)
     monkeypatch.setattr(auth_deps, "api_key_service", key_service)
     monkeypatch.setattr(admin_routes, "api_key_service", key_service)
+    sa_service = ServiceAccountService(session_factory=TestingSession)
+    monkeypatch.setattr(admin_routes, "service_account_service", sa_service)
+    monkeypatch.setattr(auth_routes, "service_account_service", sa_service)
     _, operator_key = key_service.create_key("test-operator", Role.OPERATOR)
     _, viewer_key = key_service.create_key("test-viewer", Role.VIEWER)
 

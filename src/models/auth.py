@@ -63,6 +63,12 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int
+
+class TokenRequest(BaseModel):
+    grant_type: Literal["client_credentials"] = "client_credentials"
+    client_id: str = Field(..., min_length=1)
+    client_secret: str = Field(..., min_length=1)
+
 class ServiceAccountCreateRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=128)
     role: Role = Role.PRODUCER
@@ -82,6 +88,11 @@ class ServiceAccountSummary(BaseModel):
     tenant_id: str
     enabled: bool
     created_at: datetime
+
+class ServiceAccountListResponse(BaseModel):
+    items: list[ServiceAccountSummary]
+    total: int
+
 class AuditLogEntry(BaseModel):
     id: str
     tenant_id: str

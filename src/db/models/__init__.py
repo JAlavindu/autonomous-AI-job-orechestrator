@@ -5,6 +5,7 @@ from src.db.models.run import RunRow
 from src.db.models.schedule import ScheduleRow
 from src.db.models.tenant import TenantRow
 from src.db.models.api_key import ApiKeyRow
+from src.db.models.service_account import ServiceAccountRow
 
 __all__ = [
     "ApiKeyRow",

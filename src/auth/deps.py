@@ -7,7 +7,7 @@ from src.core.config import settings
 from src.models.auth import ROLE_RANK, Principal, Role
 from src.tenancy.exceptions import RateLimitExceededError
 from src.tenancy.rate_limit import rate_limiter
-
+from src.auth.jwt_service import jwt_service
 
 def _extract_api_key(request: Request) -> str | None:
     header_key = request.headers.get(settings.API_KEY_HEADER)
@@ -31,21 +31,28 @@ def get_current_principal(request: Request) -> Principal:
             auth_method="api_key",
         )
 
-    raw_key = _extract_api_key(request)
-    if not raw_key:
+    raw_credential = _extract_api_key(request)
+    if not raw_credential:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing API key",
+            detail="Missing credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    principal = api_key_service.validate_key(raw_key)
+    # JWT first: cheap local decode, no DB hit. validate_access_token returns
+    # None for anything that isn't a valid, unexpired token we issued
+    # (including plain API keys, which aren't JWT-shaped), so fallthrough is safe.
+    principal = jwt_service.validate_access_token(raw_credential)
+    if principal is None:
+        principal = api_key_service.validate_key(raw_credential)
+
     if not principal:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or revoked API key",
+            detail="Invalid or expired credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
     
     if settings.RATE_LIMIT_ENABLED:
         try:
