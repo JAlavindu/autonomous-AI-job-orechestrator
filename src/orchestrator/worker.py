@@ -6,7 +6,7 @@ from src.core.logging_config import get_logger, setup_logging
 from src.db.lease_store import lease_store
 from src.db.stream_queue import StreamMessage, job_stream
 from src.models.job import JobStatus
-from src.orchestrator.executors.registry import execute_job
+from src.orchestrator.runners import runner
 from src.orchestrator.job_manager import job_manager
 
 setup_logging(settings.LOG_LEVEL)
@@ -77,7 +77,7 @@ def _process_message(message: StreamMessage, worker_id: str, reclaimed: bool = F
             job_stream.ack(message.message_id)
             return
         allowlist = job_manager.get_executor_allowlist_for_job(job_id)
-        result = execute_job(job, executor_allowlist=allowlist)
+        result = runner.run(job, executor_allowlist=allowlist)
 
         if result.success:
             job_manager.finish_run(run.id, JobStatus.COMPLETED, result)
