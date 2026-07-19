@@ -1,4 +1,5 @@
 ﻿x-common-env: &common-env
+  PYTHONUNBUFFERED: "1"
   REDIS_HOST: redis
   DATABASE_URL: postgresql+psycopg2://orchestrator:orchestrator@postgres:5432/orchestrator
   DEFAULT_TENANT_ID: 00000000-0000-0000-0000-000000000001
