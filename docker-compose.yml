@@ -20,7 +20,7 @@
   RECLAIM_EVERY_N_LOOPS: 5
   JOB_DLQ_STREAM_KEY: stream:jobs:dlq
   JOB_DLQ_MAXLEN: 10000
-  LEASE_KEY_PREFIX: lease:job:
+  LEASE_KEY_PREFIX: "lease:job:"
   LEASE_TTL_SECONDS: 30
   LEASE_HEARTBEAT_SECONDS: 10
   MAX_JOB_RETRIES: 3
@@ -62,8 +62,6 @@ services:
   api:
     build: .
     command: uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
-    volumes:
-      - .:/app
     ports:
       - "8000:8000"
     environment:
@@ -84,8 +82,6 @@ services:
   worker:
     build: .
     command: python src/orchestrator/worker.py
-    volumes:
-      - .:/app
     environment:
       <<: *common-env
     depends_on:
@@ -99,8 +95,6 @@ services:
   dashboard:
     build: .
     command: streamlit run src/dashboard/app.py --server.port 8501 --server.address 0.0.0.0
-    volumes:
-      - .:/app
     ports:
       - "8501:8501"
     environment:

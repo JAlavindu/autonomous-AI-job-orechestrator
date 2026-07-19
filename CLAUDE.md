@@ -95,7 +95,9 @@ Executors (`src/orchestrator/executors/`) are dispatched by `payload["type"]` ag
 - `POST /auth/token` has no rate limiting (tenant rate limits apply only *after* auth resolves) — a credential brute-force surface to harden before real exposure.
 - JWT revocation is TTL-bound: revoking a service account stops new token issuance, but already-issued JWTs stay valid until they expire (60 min default) — there is no token denylist.
 - `datetime.utcnow()` is used throughout (`job_manager`, `auth/service`) and emits deprecation warnings on Python 3.12+; prefer `datetime.now(timezone.utc)` in new code.
-- On Windows, the runner's memory/CPU limits are silent no-ops — only the wall-clock timeout protects the worker. The `setrlimit` path has only ever been exercised on Linux.
+- On Windows, the runner's memory/CPU limits are silent no-ops — only the wall-clock timeout protects the worker. The `setrlimit` path is verified on Linux via `docker-compose exec worker python -m pytest tests/test_subprocess_runner.py` (all 5 tests run there, no skips).
+- The worker logs periodic `redis.exceptions.TimeoutError` tracebacks while idle-polling the stream — caught and harmless (jobs still process normally), but noisy.
+- `requirements.txt` must stay ASCII/UTF-8: PowerShell's `>`/`>>` redirection writes UTF-16, which Linux pip cannot parse (this broke the Docker build once). Use `pip freeze | Out-File requirements.txt -Encoding utf8`. The Docker image is `python:3.14-slim` to match the environment the pins were frozen on.
 
 ### Logs & output storage
 Run stdout/stderr/error are capped (`MAX_RUN_OUTPUT_CHARS`) and, past `LOG_SPILL_THRESHOLD_CHARS`, spilled to files under `LOG_STORAGE_ROOT` (`src/storage/run_logs.py`, `src/storage/log_store.py`) with only a short preview + `log_ref` kept inline in Postgres. `GET /jobs/{id}/runs/{run_id}/logs?full=true` reads the spilled file back via `load_full_run_logs`.
