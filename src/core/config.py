@@ -21,6 +21,15 @@ class Settings(BaseSettings):
     DEFAULT_JOB_MEMORY_MB: int = 0  # 0 = unlimited
     DEFAULT_JOB_CPU_SECONDS: float = 0  # 0 = unlimited
 
+        # --- Phase 3 worker autoscaling ---
+    AUTOSCALE_MIN_WORKERS: int = 1
+    AUTOSCALE_MAX_WORKERS: int = 5
+    AUTOSCALE_BACKLOG_PER_WORKER: int = 5   # 1 worker per this many waiting jobs
+    AUTOSCALE_INTERVAL_SECONDS: float = 10.0
+    AUTOSCALE_SCALE_DOWN_COOLDOWN_SECONDS: float = 60.0
+    AUTOSCALE_STOP_TIMEOUT_SECONDS: int = 30
+
+
     DATABASE_URL: str = "postgresql+psycopg2://orchestrator:orchestrator@localhost:5432/orchestrator"
     DEFAULT_TENANT_ID: str = "00000000-0000-0000-0000-000000000001"
     DEFAULT_TENANT_NAME: str = "default"

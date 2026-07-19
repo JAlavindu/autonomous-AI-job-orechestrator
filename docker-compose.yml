@@ -145,6 +145,20 @@ services:
       - postgres
     profiles:
       - prod
+  
+  autoscaler:
+    build: .
+    command: python src/orchestrator/autoscaler.py
+    environment:
+      <<: *common-env
+    volumes:
+      - .:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - redis
+      - postgres
+      - worker
+
 
 volumes:
   redis_data:
