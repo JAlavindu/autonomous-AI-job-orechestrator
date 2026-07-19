@@ -8,7 +8,6 @@ container. The original compose worker is used as a template and is never
 stopped by the autoscaler; scale-down only removes clones it created.
 """
 
-
 from __future__ import annotations
 
 import math
@@ -17,7 +16,7 @@ import uuid
 
 import docker
 import redis
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 
 from src.core.config import settings
 from src.core.logging_config import get_logger
@@ -25,20 +24,18 @@ from src.db.models import JobRow
 from src.db.session import SessionLocal
 from src.db.stream_queue import job_stream
 
-
 logger = get_logger(__name__)
 
 AUTOSCALED_LABEL = "orchestrator.autoscaled"
 COMPOSE_SERVICE_LABEL = "com.docker.compose.service"
+
 
 def get_backlog() -> int:
     """Waiting work = PENDING jobs in Postgres + enqueued-but-undelivered stream entries."""
     with SessionLocal() as db:
         pending_db = (
             db.scalar(
-                select(func.count())
-                .select_from(JobRow)
-                .where(JobRow.status == "PENDING")
+                select(func.count()).select_from(JobRow).where(JobRow.status == "PENDING")
             )
             or 0
         )
@@ -49,34 +46,42 @@ def get_backlog() -> int:
             if group.get("name") == settings.JOB_STREAM_GROUP:
                 stream_lag = group.get("lag") or 0
     except redis.ResponseError:
-        pass # stream or group doesn't exist yet, so lag is 0
+        pass  # stream/group not created yet -> no lag
 
     return pending_db + stream_lag
 
+
 def compute_desired_workers(
-    backlog: int, min_workers: int, max_workers: int, backlog_per_worker: int) -> int:
+    backlog: int, min_workers: int, max_workers: int, backlog_per_worker: int
+) -> int:
     """One worker per `backlog_per_worker` waiting jobs, clamped to [min, max]."""
     if backlog <= 0:
         return min_workers
     desired = math.ceil(backlog / backlog_per_worker)
-    return max(min_workers, min(desired, max_workers))
+    return max(min_workers, min(max_workers, desired))
 
-class DockerWorkerScale:
+
+class DockerWorkerScaler:
     """Starts/stops worker containers by cloning the compose-managed worker."""
 
     def __init__(self, client: docker.DockerClient | None = None):
         self.client = client or docker.from_env()
-    
+
     def _template(self):
         containers = self.client.containers.list(
             filters={"label": f"{COMPOSE_SERVICE_LABEL}=worker", "status": "running"}
         )
         return containers[0] if containers else None
-    
+
+    def _clones(self):
+        return self.client.containers.list(
+            filters={"label": f"{AUTOSCALED_LABEL}=true", "status": "running"}
+        )
+
     def count(self) -> int:
-        return(1 if self._template() else 0) + len(self._clones())
-    
-    def scale_to(self, desired: int) ->None:
+        return (1 if self._template() else 0) + len(self._clones())
+
+    def scale_to(self, desired: int) -> None:
         current = self.count()
         if desired > current:
             for _ in range(desired - current):
@@ -163,5 +168,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
-
